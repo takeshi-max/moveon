@@ -3,31 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>AI Cinematic Video Maker V6</title>
+  <title>AI Cinematic Video Maker Pro V6</title>
   <style>
     :root { --bg: #020617; --accent: #8b5cf6; --text: #f8fafc; }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: env(safe-area-inset-top) 15px; display: flex; justify-content: center; overflow: hidden; }
     .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; height: 100vh; }
-    
     .video-viewport { width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 40px 100px rgba(0,0,0,0.9); cursor: pointer; }
-    .bg-image { position: absolute; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 2s ease; transform: scale(1.0); }
+    #glCanvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 1.5s ease; }
+    #glCanvas.active { opacity: 1; }
     #particleCanvas { position: absolute; inset: 0; z-index: 10; pointer-events: none; mix-blend-mode: screen; opacity: 0.5; }
     .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.9) 100%); pointer-events: none; z-index: 15; }
     .flare-effect { position: absolute; top: 0; left: -150%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); z-index: 20; transform: skewX(-25deg); pointer-events: none; }
     .flare-anim { animation: flareMove 1.8s ease-in-out forwards; }
     @keyframes flareMove { from { left: -150%; } to { left: 150%; } }
-    
-    .caption-box { position: absolute; bottom: 12%; left: 10%; right: 10%; padding: 20px; text-align: center; color: #fff; z-index: 25; font-size: 19px; font-weight: 900; line-height: 1.6; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); border-radius: 15px; }
+    .caption-box { position: absolute; bottom: 12%; left: 8%; right: 8%; padding: 18px; text-align: center; color: #fff; z-index: 25; font-size: 18px; font-weight: 800; line-height: 1.6; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none; background: rgba(10, 10, 25, 0.6); backdrop-filter: blur(10px); border-radius: 18px; border-left: 4px solid var(--accent); }
     .progress-container { position: absolute; top: 15px; left: 15px; right: 15px; height: 3px; background: rgba(255,255,255,0.15); border-radius: 10px; z-index: 30; }
     .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.4s ease; }
-
     .controls-panel { transition: 0.5s; max-height: 600px; }
     .controls-panel.hidden { max-height: 0; opacity: 0; pointer-events: none; transform: translateY(-20px); }
-    .card { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); }
+    .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
     input, select { width: 100%; padding: 16px; border-radius: 14px; border: 1px solid #475569; background: #000; color: white; font-size: 15px; margin-bottom: 10px; outline: none; }
     .main-btn { width: 100%; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 16px; font-weight: 800; font-size: 17px; cursor: pointer; box-shadow: 0 5px 20px rgba(139, 92, 246, 0.5); }
-    .status-msg { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 10px; min-height: 1.2em; letter-spacing: 1px; }
+    .status-msg { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 10px; min-height: 1.2em; letter-spacing: 1px; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -38,8 +36,8 @@
       <input type="text" id="topicInput" placeholder="動画のテーマを入力">
       <select id="styleSelect">
         <option value="cinematic photo, photorealistic, 8k, masterpiece, highly detailed">実写映画風</option>
-        <option value="gorgeous anime style, makoto shinkai style, breathtaking scenery">アニメ・新海誠風</option>
-        <option value="cyberpunk city, neon lighting, futuristic atmosphere">SF・サイバーパンク</option>
+        <option value="anime style, makoto shinkai style, breathtaking scenery">アニメ風</option>
+        <option value="cyberpunk city, neon lighting, futuristic atmosphere">サイバーパンク</option>
       </select>
       <button class="main-btn" id="genBtn" onclick="startGeneration()">🎬 映像を構成する</button>
       <div id="status" class="status-msg">READY.</div>
@@ -49,134 +47,181 @@
     <div class="vignette"></div>
     <div class="flare-effect" id="flare"></div>
     <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
+    <canvas id="glCanvas"></canvas>
     <canvas id="particleCanvas"></canvas>
-    <img id="img1" class="bg-image">
-    <img id="img2" class="bg-image">
     <div id="caption" class="caption-box"></div>
   </div>
 </div>
+
 <script>
   let timeline = [];
   let isPlaying = false;
   let audioCtx = null;
   let bgmGain = null;
+  let gl, program, currentTexture, animFrameId, startTime;
+  let timeLoc, zoomLoc, moveLoc;
 
   const apiKeyInput = document.getElementById('apiKey');
-  apiKeyInput.value = localStorage.getItem('video_v6_key') || '';
-  apiKeyInput.addEventListener('change', () => localStorage.setItem('video_v6_key', apiKeyInput.value.trim()));
+  apiKeyInput.value = localStorage.getItem('video_v6_gl_key') || '';
+  apiKeyInput.addEventListener('change', () => localStorage.setItem('video_v6_gl_key', apiKeyInput.value.trim()));
 
-  function initParticles() {
-    const canvas = document.getElementById('particleCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
-    let particles = Array.from({length: 40}, () => ({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2+1, v: Math.random()*0.5+0.2 }));
-    function anim() {
-      ctx.clearRect(0,0,canvas.width, canvas.height);
-      particles.forEach(p => { p.y -= p.v; if(p.y < 0) p.y = canvas.height; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI*2); ctx.fill(); });
-      if(isPlaying) requestAnimationFrame(anim);
+  // ----------------------------------------------------
+  // WebGL: 高度なシネマティックシェーダー
+  // ----------------------------------------------------
+  const vs = `attribute vec2 p;attribute vec2 t;varying vec2 v;void main(){gl_Position=vec4(p,0,1);v=t;}`;
+  const fs = `
+    precision mediump float;
+    uniform sampler2D s; uniform float t; uniform float z; uniform vec2 m; varying vec2 v;
+    void main(){
+      vec2 uv = v - 0.5;
+      float d = length(uv);
+      // 疑似3D歪みとパン
+      uv += sin(uv.yx * 15.0 + t) * 0.003; 
+      uv *= (1.0 / z);
+      uv += m * (1.0 - d * 0.5);
+      gl_FragColor = texture2D(s, uv + 0.5);
     }
-    anim();
+  `;
+
+  function initGL() {
+    const c = document.getElementById('glCanvas');
+    gl = c.getContext('webgl');
+    if(!gl) return;
+    c.width = c.offsetWidth; c.height = c.offsetHeight;
+    const shader = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+    program = gl.createProgram();
+    gl.attachShader(program, shader(gl.VERTEX_SHADER, vs));
+    gl.attachShader(program, shader(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(program); gl.useProgram(program);
+    
+    const buf = (data) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW); return b; };
+    const pBuf = buf([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]);
+    const pLoc = gl.getAttribLocation(program, "p");
+    gl.enableVertexAttribArray(pLoc); gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
+    
+    const tBuf = buf([0,1,1,1,0,0,0,0,1,1,1,0]);
+    const tLoc = gl.getAttribLocation(program, "t");
+    gl.enableVertexAttribArray(tLoc); gl.vertexAttribPointer(tLoc, 2, gl.FLOAT, false, 0, 0);
+
+    timeLoc = gl.getUniformLocation(program, "t");
+    zoomLoc = gl.getUniformLocation(program, "z");
+    moveLoc = gl.getUniformLocation(program, "m");
   }
 
-  function startBGM() {
-    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    bgmGain = audioCtx.createGain();
-    bgmGain.gain.setValueAtTime(0, audioCtx.currentTime);
-    bgmGain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 4);
-    bgmGain.connect(audioCtx.destination);
-    [55, 110, 164].forEach((f, i) => {
-      const osc = audioCtx.createOscillator();
-      osc.type = i === 0 ? 'triangle' : 'sine';
-      osc.frequency.value = f; osc.connect(bgmGain); osc.start();
-    });
+  function setTexture(img) {
+    if(currentTexture) gl.deleteTexture(currentTexture);
+    currentTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, currentTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
   }
 
+  // ----------------------------------------------------
+  // 生成ロジック
+  // ----------------------------------------------------
   async function startGeneration() {
     const apiKey = apiKeyInput.value.trim();
     const topic = document.getElementById('topicInput').value.trim();
     if (!apiKey || !topic) return alert("入力を確認してください");
     const status = document.getElementById('status');
-    const genBtn = document.getElementById('genBtn');
-    genBtn.disabled = true;
+    document.getElementById('genBtn').disabled = true;
 
     try {
-      // 1. 利用可能な全モデルをスキャン（404エラー回避）
       status.textContent = "スキャン中...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       const mData = await mRes.json();
-      if(!mRes.ok) throw new Error(mData.error?.message);
-
       const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b) => b.name.localeCompare(a.name));
-      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSONで作って。解説不要。{"scenes": [{"text": "短い台詞", "img_prompt": "English visual description"}]}`;
+      const lastModel = localStorage.getItem('working_model_v6');
+      const targetModels = lastModel ? [{name: lastModel}, ...models.filter(m => m.name !== lastModel)] : models;
+
+      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSONで作って。{"scenes": [{"text": "短い台詞", "img_prompt": "English visual description"}]}`;
 
       let success = false;
-      // 2. 使えるモデルをしらみつぶしに試す（空の返答＝429や安全制限も回避）
-      for (const m of models) {
+      for (const m of targetModels) {
         status.textContent = `試行中: ${m.name.split('/').pop()}...`;
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              safetySettings: [ // 安全フィルターを最弱に
-                {category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE"},
-                {category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE"},
-                {category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE"},
-                {category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE"}
-              ],
               generationConfig: { responseMimeType: "application/json" }
             })
           });
           const data = await res.json();
-          if (res.ok && data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+          // ★ここで'0'エラーをガード！
+          if (res.ok && data.candidates && data.candidates.length > 0) {
             const rawText = data.candidates[0].content.parts[0].text;
             timeline = JSON.parse(rawText.match(/\{[\s\S]*\}/)[0]).scenes;
+            localStorage.setItem('working_model_v6', m.name);
             success = true; break;
           }
-        } catch (e) { console.warn(m.name + " 失敗", e); continue; }
+        } catch (e) { continue; }
       }
 
-      if (!success) throw new Error("AIが制限されているか、不適切なテーマです。10分待つか別のテーマを試してください。");
-
+      if (!success) throw new Error("AI制限中です。10分ほど待ってください。");
       document.getElementById('uiPanel').classList.add('hidden');
-      startBGM(); initParticles(); playMovie();
-    } catch (e) { alert(e.message); genBtn.disabled = false; }
+      initGL(); startBGM(); playMovie();
+    } catch (e) { alert(e.message); document.getElementById('genBtn').disabled = false; }
   }
 
   async function playMovie() {
     isPlaying = true;
     let step = 0;
     const style = document.getElementById('styleSelect').value;
+    const canvas = document.getElementById('glCanvas');
+
     while (step < timeline.length && isPlaying) {
       const scene = timeline[step];
-      const activeImg = document.getElementById(step % 2 === 0 ? 'img1' : 'img2');
-      const inactiveImg = document.getElementById(step % 2 === 0 ? 'img2' : 'img1');
       const flare = document.getElementById('flare');
-      
       document.getElementById('progressBar').style.width = `${((step + 1) / timeline.length) * 100}%`;
       flare.classList.remove('flare-anim'); void flare.offsetWidth; flare.classList.add('flare-anim');
 
       const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.img_prompt + ", " + style)}?width=540&height=960&nologo=true&seed=${Math.floor(Math.random()*99999)}`;
-      document.getElementById('status').textContent = `SCENE ${step + 1} RENDER...`;
-      await new Promise(r => { activeImg.onload = r; activeImg.src = imgUrl; });
+      const img = new Image(); img.crossOrigin = "anonymous";
+      await new Promise(r => { img.onload = r; img.onerror = r; img.src = imgUrl; });
 
+      setTexture(img);
+      canvas.classList.add('active');
       document.getElementById('caption').textContent = scene.text;
       document.getElementById('caption').style.display = 'block';
-      activeImg.style.opacity = 1; inactiveImg.style.opacity = 0;
-      activeImg.style.transform = "scale(1.2)";
-      activeImg.style.transition = "transform 10s linear, opacity 2s ease";
+
+      startTime = Date.now();
+      const render = () => {
+        if(!isPlaying) return;
+        const e = (Date.now() - startTime) / 1000;
+        gl.uniform1f(timeLoc, e);
+        gl.uniform1f(zoomLoc, 1.05 + e * 0.02);
+        gl.uniform2f(moveLoc, Math.sin(e*0.5)*0.02, Math.cos(e*0.4)*0.01);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        animFrameId = requestAnimationFrame(render);
+      };
+      if(animFrameId) cancelAnimationFrame(animFrameId);
+      render();
 
       await new Promise(resolve => {
-        const uttr = new SpeechSynthesisUtterance(scene.text);
-        uttr.lang = 'ja-JP'; uttr.rate = 1.0; uttr.onend = resolve;
-        window.speechSynthesis.speak(uttr);
-        setTimeout(resolve, 7000);
+        const u = new SpeechSynthesisUtterance(scene.text);
+        u.lang = 'ja-JP'; u.onend = resolve;
+        window.speechSynthesis.speak(u);
+        setTimeout(resolve, 8000);
       });
       step++;
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 800));
     }
     location.reload();
+  }
+
+  function startBGM() {
+    audioCtx = new AudioContext();
+    bgmGain = audioCtx.createGain(); bgmGain.connect(audioCtx.destination);
+    bgmGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    bgmGain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 4);
+    [55, 110, 164].forEach(f => {
+      const o = audioCtx.createOscillator(); o.type = 'triangle';
+      o.frequency.value = f; o.connect(bgmGain); o.start();
+    });
   }
 </script>
 </body>
