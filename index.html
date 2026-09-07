@@ -3,260 +3,76 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>AI Cinematic Video Maker Pro V6 (Pseudo-3D & Displacement)</title>
+  <title>AI Cinematic Video Maker V6</title>
   <style>
     :root { --bg: #020617; --accent: #8b5cf6; --text: #f8fafc; }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: env(safe-area-inset-top) 15px; display: flex; justify-content: center; overflow: hidden; }
+    body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: env(safe-area-inset-top) 15px; display: flex; justify-content: center; overflow: hidden; }
     .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; height: 100vh; }
-
-    /* 9:16 シネマティックビューポート */
-    .video-viewport {
-      width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px;
-      position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15);
-      box-shadow: 0 40px 100px rgba(0,0,0,0.9); cursor: pointer;
-    }
-
-    /* WebGL Canvas レイヤー */
-    #glCanvas {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      object-fit: cover; z-index: 1; transition: opacity 1.5s ease-in-out;
-      opacity: 0;
-    }
-    #glCanvas.active { opacity: 1; }
-
-    /* オーバーレイ＆パーティクル Canvas */
-    #particleCanvas { position: absolute; inset: 0; z-index: 10; pointer-events: none; mix-blend-mode: screen; opacity: 0.6; }
-    .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.85) 100%); pointer-events: none; z-index: 15; }
+    
+    .video-viewport { width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 40px 100px rgba(0,0,0,0.9); cursor: pointer; }
+    .bg-image { position: absolute; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 2s ease; transform: scale(1.0); }
+    #particleCanvas { position: absolute; inset: 0; z-index: 10; pointer-events: none; mix-blend-mode: screen; opacity: 0.5; }
+    .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.9) 100%); pointer-events: none; z-index: 15; }
     .flare-effect { position: absolute; top: 0; left: -150%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); z-index: 20; transform: skewX(-25deg); pointer-events: none; }
     .flare-anim { animation: flareMove 1.8s ease-in-out forwards; }
     @keyframes flareMove { from { left: -150%; } to { left: 150%; } }
-
-    /* プログレスバー */
+    
+    .caption-box { position: absolute; bottom: 12%; left: 10%; right: 10%; padding: 20px; text-align: center; color: #fff; z-index: 25; font-size: 19px; font-weight: 900; line-height: 1.6; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); border-radius: 15px; }
     .progress-container { position: absolute; top: 15px; left: 15px; right: 15px; height: 3px; background: rgba(255,255,255,0.15); border-radius: 10px; z-index: 30; }
-    .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.4s ease; box-shadow: 0 0 10px var(--accent); }
+    .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.4s ease; }
 
-    /* 字幕（シネマテロップ） */
-    .caption-box {
-      position: absolute; bottom: 12%; left: 8%; right: 8%; padding: 18px 22px;
-      text-align: center; color: #fff; z-index: 25; font-size: 18px; font-weight: 800; line-height: 1.6;
-      text-shadow: 0 2px 20px rgba(0,0,0,1); display: none;
-      background: rgba(10, 10, 25, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); border-left: 5px solid var(--accent);
-      animation: textPop 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes textPop { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-    /* UIパネル */
     .controls-panel { transition: 0.5s; max-height: 600px; }
     .controls-panel.hidden { max-height: 0; opacity: 0; pointer-events: none; transform: translateY(-20px); }
-    .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
-    input, select { width: 100%; padding: 15px; border-radius: 14px; border: 1px solid #475569; background: #090d16; color: white; font-size: 14px; margin-bottom: 10px; outline: none; }
-    .main-btn { width: 100%; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 16px; font-weight: 800; font-size: 16px; cursor: pointer; box-shadow: 0 5px 20px rgba(139, 92, 246, 0.5); transition: transform 0.1s; }
-    .main-btn:active { transform: scale(0.98); }
-    .status-msg { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 10px; min-height: 1.2em; font-family: monospace; letter-spacing: 1px; }
+    .card { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.05); }
+    input, select { width: 100%; padding: 16px; border-radius: 14px; border: 1px solid #475569; background: #000; color: white; font-size: 15px; margin-bottom: 10px; outline: none; }
+    .main-btn { width: 100%; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 16px; font-weight: 800; font-size: 17px; cursor: pointer; box-shadow: 0 5px 20px rgba(139, 92, 246, 0.5); }
+    .status-msg { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 10px; min-height: 1.2em; letter-spacing: 1px; }
   </style>
 </head>
 <body>
-
 <div class="app-container">
   <div class="controls-panel" id="uiPanel">
     <div class="card">
       <input type="password" id="apiKey" placeholder="Gemini API Key">
-      <input type="text" id="topicInput" placeholder="動画のテーマ（例：未来都市のサイバーパンク）">
+      <input type="text" id="topicInput" placeholder="動画のテーマを入力">
       <select id="styleSelect">
-        <option value="cinematic photo, photorealistic, 8k, masterpiece, dramatic lighting">実写映画風 (Cinematic)</option>
-        <option value="gorgeous anime style, makoto shinkai style, breathtaking scenery">アニメ・新海誠風 (Anime)</option>
-        <option value="cyberpunk city, neon glowing, futuristic atmosphere, Unreal Engine 5">SF・サイバーパンク (Cyberpunk)</option>
+        <option value="cinematic photo, photorealistic, 8k, masterpiece, highly detailed">実写映画風</option>
+        <option value="gorgeous anime style, makoto shinkai style, breathtaking scenery">アニメ・新海誠風</option>
+        <option value="cyberpunk city, neon lighting, futuristic atmosphere">SF・サイバーパンク</option>
       </select>
-      <button class="main-btn" id="genBtn" onclick="startGeneration()">🎬 V6 疑似3D動画を生成</button>
+      <button class="main-btn" id="genBtn" onclick="startGeneration()">🎬 映像を構成する</button>
       <div id="status" class="status-msg">READY.</div>
     </div>
   </div>
-
   <div class="video-viewport" id="player">
-    <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
     <div class="vignette"></div>
     <div class="flare-effect" id="flare"></div>
-    
-    <!-- 疑似3D WebGL キャンバス -->
-    <canvas id="glCanvas"></canvas>
-    <!-- 浮遊パーティクル キャンバス -->
+    <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
     <canvas id="particleCanvas"></canvas>
-
+    <img id="img1" class="bg-image">
+    <img id="img2" class="bg-image">
     <div id="caption" class="caption-box"></div>
   </div>
 </div>
-
 <script>
   let timeline = [];
   let isPlaying = false;
   let audioCtx = null;
   let bgmGain = null;
 
-  // WebGL 関連変数
-  let gl, program, positionBuffer, texCoordBuffer;
-  let timeUniformLoc, resolutionUniformLoc, textureUniformLoc, zoomUniformLoc, moveUniformLoc;
-  let currentTexture = null;
-  let startTime = 0;
-  let animationFrameId = null;
-
   const apiKeyInput = document.getElementById('apiKey');
   apiKeyInput.value = localStorage.getItem('video_v6_key') || '';
   apiKeyInput.addEventListener('change', () => localStorage.setItem('video_v6_key', apiKeyInput.value.trim()));
 
-  /* ----------------------------------------------------
-     1. WebGL 疑似3D / Displacement (歪み) シェーダー初期化
-  ---------------------------------------------------- */
-  const vertexShaderSource = `
-    attribute vec2 a_position;
-    attribute vec2 a_texCoord;
-    varying vec2 v_texCoord;
-    void main() {
-      gl_Position = vec4(a_position, 0.0, 1.0);
-      v_texCoord = a_texCoord;
-    }
-  `;
-
-  // 疑似3D深度スウェイ & 水平ウネリ（Displacement Wave）シェーダー
-  const fragmentShaderSource = `
-    precision mediump float;
-    uniform sampler2D u_image;
-    uniform float u_time;
-    uniform vec2 u_resolution;
-    uniform float u_zoom;
-    uniform vec2 u_move;
-    varying vec2 v_texCoord;
-
-    void main() {
-      vec2 uv = v_texCoord;
-
-      // 中央基準へシフト
-      vec2 st = uv - 0.5;
-
-      // 1. 波紋・気流のウネリ（Displacement Distortion）
-      float waveX = sin(st.y * 12.0 + u_time * 1.5) * 0.008;
-      float waveY = cos(st.x * 12.0 + u_time * 1.2) * 0.008;
-      st += vec2(waveX, waveY);
-
-      // 2. ズーム & 3Dパララックス（視差スウェイ）
-      float dist = length(st);
-      float depth = (1.0 - dist * 0.5); // 中心ほど手前、周辺ほど奥の疑似深度
-      
-      st *= (1.0 / u_zoom);
-      st += u_move * depth; // 深度に応じたパララックスシフト
-
-      // テクスチャ座標復元
-      uv = st + 0.5;
-
-      // 画面端のアウトオブバウンズ防護
-      uv = clamp(uv, 0.001, 0.999);
-
-      vec4 color = texture2D(u_image, uv);
-
-      // シネマティック微妙なレンズ歪みシャドウ
-      color.rgb *= (1.0 - dist * 0.2);
-
-      gl_FragColor = color;
-    }
-  `;
-
-  function initWebGL() {
-    const canvas = document.getElementById('glCanvas');
-    canvas.width = canvas.offsetWidth || 360;
-    canvas.height = canvas.offsetHeight || 640;
-
-    gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    if (!gl) return alert("お使いのブラウザはWebGLに対応していません。");
-
-    // 頂点シェーダー作成
-    const vertShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vertShader, vertexShaderSource);
-    gl.compileShader(vertShader);
-
-    // フラグメントシェーダー作成
-    const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fragShader, fragmentShaderSource);
-    gl.compileShader(fragShader);
-
-    // プログラムリンク
-    program = gl.createProgram();
-    gl.attachShader(program, vertShader);
-    gl.attachShader(program, fragShader);
-    gl.linkProgram(program);
-    gl.useProgram(program);
-
-    // 属性ロケーション取得
-    const positionLocation = gl.getAttribLocation(program, "a_position");
-    const texCoordLocation = gl.getAttribLocation(program, "a_texCoord");
-
-    // ユニフォームロケーション取得
-    timeUniformLoc = gl.getUniformLocation(program, "u_time");
-    resolutionUniformLoc = gl.getUniformLocation(program, "u_resolution");
-    zoomUniformLoc = gl.getUniformLocation(program, "u_zoom");
-    moveUniformLoc = gl.getUniformLocation(program, "u_move");
-
-    // 頂点バッファ準備
-    positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1,  1, -1, -1,  1,
-      -1,  1,  1, -1,  1,  1
-    ]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-    // テクスチャ座標バッファ準備 (Y軸反転対応)
-    texCoordBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      0, 1,  1, 1,  0, 0,
-      0, 0,  1, 1,  1, 0
-    ]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(texCoordLocation);
-    gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-    gl.uniform2f(resolutionUniformLoc, canvas.width, canvas.height);
-  }
-
-  function loadGLTexture(image) {
-    if (currentTexture) gl.deleteTexture(currentTexture);
-    currentTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, currentTexture);
-
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-  }
-
-  /* ----------------------------------------------------
-     2. パーティクルシステム & BGM
-  ---------------------------------------------------- */
   function initParticles() {
     const canvas = document.getElementById('particleCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
-    let particles = Array.from({length: 45}, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      s: Math.random() * 2 + 0.8,
-      v: Math.random() * 0.4 + 0.2,
-      opacity: Math.random() * 0.6 + 0.2
-    }));
-
+    let particles = Array.from({length: 40}, () => ({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2+1, v: Math.random()*0.5+0.2 }));
     function anim() {
       ctx.clearRect(0,0,canvas.width, canvas.height);
-      particles.forEach(p => {
-        p.y -= p.v;
-        if(p.y < 0) p.y = canvas.height;
-        ctx.fillStyle = `rgba(255,255,255,${p.opacity})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
-        ctx.fill();
-      });
+      particles.forEach(p => { p.y -= p.v; if(p.y < 0) p.y = canvas.height; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI*2); ctx.fill(); });
       if(isPlaying) requestAnimationFrame(anim);
     }
     anim();
@@ -267,162 +83,100 @@
     if(audioCtx.state === 'suspended') audioCtx.resume();
     bgmGain = audioCtx.createGain();
     bgmGain.gain.setValueAtTime(0, audioCtx.currentTime);
-    bgmGain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 3);
+    bgmGain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 4);
     bgmGain.connect(audioCtx.destination);
-
-    [55, 110, 164.81].forEach((f, i) => {
+    [55, 110, 164].forEach((f, i) => {
       const osc = audioCtx.createOscillator();
       osc.type = i === 0 ? 'triangle' : 'sine';
-      osc.frequency.value = f;
-      osc.connect(bgmGain);
-      osc.start();
+      osc.frequency.value = f; osc.connect(bgmGain); osc.start();
     });
   }
 
-  /* ----------------------------------------------------
-     3. AI シーン生成 & 探査
-  ---------------------------------------------------- */
   async function startGeneration() {
     const apiKey = apiKeyInput.value.trim();
     const topic = document.getElementById('topicInput').value.trim();
-    if (!apiKey || !topic) return alert("API Keyとテーマを入力してください");
-
+    if (!apiKey || !topic) return alert("入力を確認してください");
     const status = document.getElementById('status');
-    document.getElementById('genBtn').disabled = true;
+    const genBtn = document.getElementById('genBtn');
+    genBtn.disabled = true;
 
     try {
-      status.textContent = "SEARCHING GEMINI MODELS...";
+      // 1. 利用可能な全モデルをスキャン（404エラー回避）
+      status.textContent = "スキャン中...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       const mData = await mRes.json();
-      if(!mRes.ok) throw new Error(mData.error?.message || "APIキーが無効です");
+      if(!mRes.ok) throw new Error(mData.error?.message);
 
-      const models = mData.models
-        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-        .sort((a,b) => b.name.localeCompare(a.name));
-
-      const prompt = `テーマ「${topic}」で壮大な5シーンの映画風ショート動画台本を作成。
-JSONフォーマットのみで出力してください。解説文不要。
-{"scenes": [{"text": "日本語の短いセリフ", "img_prompt": "English visual description for video scene"}]}`;
+      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b) => b.name.localeCompare(a.name));
+      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSONで作って。解説不要。{"scenes": [{"text": "短い台詞", "img_prompt": "English visual description"}]}`;
 
       let success = false;
+      // 2. 使えるモデルをしらみつぶしに試す（空の返答＝429や安全制限も回避）
       for (const m of models) {
-        status.textContent = `GENERATING (${m.name.split('/').pop()})...`;
+        status.textContent = `試行中: ${m.name.split('/').pop()}...`;
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
+              safetySettings: [ // 安全フィルターを最弱に
+                {category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE"},
+                {category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE"},
+                {category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE"},
+                {category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE"}
+              ],
               generationConfig: { responseMimeType: "application/json" }
             })
           });
           const data = await res.json();
-          if (res.ok && data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-            const raw = data.candidates[0].content.parts[0].text;
-            timeline = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]).scenes;
+          if (res.ok && data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+            const rawText = data.candidates[0].content.parts[0].text;
+            timeline = JSON.parse(rawText.match(/\{[\s\S]*\}/)[0]).scenes;
             success = true; break;
           }
-        } catch (e) { continue; }
+        } catch (e) { console.warn(m.name + " 失敗", e); continue; }
       }
 
-      if (!success) throw new Error("AI応答を取得できませんでした。時間を置いて試してください。");
+      if (!success) throw new Error("AIが制限されているか、不適切なテーマです。10分待つか別のテーマを試してください。");
 
       document.getElementById('uiPanel').classList.add('hidden');
-      initWebGL();
-      startBGM();
-      initParticles();
-      playMovie();
-
-    } catch (e) {
-      alert(e.message);
-      document.getElementById('genBtn').disabled = false;
-      status.textContent = "READY.";
-    }
+      startBGM(); initParticles(); playMovie();
+    } catch (e) { alert(e.message); genBtn.disabled = false; }
   }
 
-  /* ----------------------------------------------------
-     4. 動画再生 (WebGL リアルタイム歪みレンダリング)
-  ---------------------------------------------------- */
   async function playMovie() {
     isPlaying = true;
     let step = 0;
     const style = document.getElementById('styleSelect').value;
-    const glCanvas = document.getElementById('glCanvas');
-
     while (step < timeline.length && isPlaying) {
       const scene = timeline[step];
-
-      // プログレスバー更新
-      document.getElementById('progressBar').style.width = `${((step + 1) / timeline.length) * 100}%`;
-
-      // レンズフレア演出トリガー
+      const activeImg = document.getElementById(step % 2 === 0 ? 'img1' : 'img2');
+      const inactiveImg = document.getElementById(step % 2 === 0 ? 'img2' : 'img1');
       const flare = document.getElementById('flare');
+      
+      document.getElementById('progressBar').style.width = `${((step + 1) / timeline.length) * 100}%`;
       flare.classList.remove('flare-anim'); void flare.offsetWidth; flare.classList.add('flare-anim');
 
       const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.img_prompt + ", " + style)}?width=540&height=960&nologo=true&seed=${Math.floor(Math.random()*99999)}`;
-      document.getElementById('status').textContent = `SCENE ${step + 1} RENDERING...`;
-
-      // 画像ロード待ち
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; img.src = imgUrl; });
-
-      // テクスチャロード & フェードイン
-      loadGLTexture(img);
-      glCanvas.classList.add('active');
+      document.getElementById('status').textContent = `SCENE ${step + 1} RENDER...`;
+      await new Promise(r => { activeImg.onload = r; activeImg.src = imgUrl; });
 
       document.getElementById('caption').textContent = scene.text;
       document.getElementById('caption').style.display = 'block';
+      activeImg.style.opacity = 1; inactiveImg.style.opacity = 0;
+      activeImg.style.transform = "scale(1.2)";
+      activeImg.style.transition = "transform 10s linear, opacity 2s ease";
 
-      // 疑似3D シェーダーアニメーションループ開始
-      startTime = Date.now();
-      function renderLoop() {
-        if(!isPlaying) return;
-        const elapsed = (Date.now() - startTime) / 1000.0;
-
-        gl.uniform1f(timeUniformLoc, elapsed);
-
-        // ズームイン & パララックス移動アニメーション
-        const zoom = 1.05 + elapsed * 0.02; 
-        const moveX = Math.sin(elapsed * 0.5) * 0.03;
-        const moveY = Math.cos(elapsed * 0.4) * 0.02;
-
-        gl.uniform1f(zoomUniformLoc, zoom);
-        gl.uniform2f(moveUniformLoc, moveX, moveY);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-        animationFrameId = requestAnimationFrame(renderLoop);
-      }
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      renderLoop();
-
-      // ナレーション音声再生
-      await speak(scene.text);
-
+      await new Promise(resolve => {
+        const uttr = new SpeechSynthesisUtterance(scene.text);
+        uttr.lang = 'ja-JP'; uttr.rate = 1.0; uttr.onend = resolve;
+        window.speechSynthesis.speak(uttr);
+        setTimeout(resolve, 7000);
+      });
       step++;
-      if (step < timeline.length) await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 1000));
     }
-
     location.reload();
-  }
-
-  /* ----------------------------------------------------
-     5. 音声合成 (TTS)
-  ---------------------------------------------------- */
-  function speak(text) {
-    return new Promise(resolve => {
-      window.speechSynthesis.cancel();
-      const uttr = new SpeechSynthesisUtterance(text);
-      uttr.lang = 'ja-JP'; uttr.rate = 0.95; uttr.pitch = 0.85;
-
-      let done = false;
-      const finish = () => { if (!done) { done = true; resolve(); } };
-
-      uttr.onend = finish;
-      uttr.onerror = finish;
-      setTimeout(finish, Math.max(3000, text.length * 280 + 2000));
-
-      window.speechSynthesis.speak(uttr);
-    });
   }
 </script>
 </body>
