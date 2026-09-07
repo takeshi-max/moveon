@@ -3,110 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>AI MP4 Cinematic Video Player</title>
+  <title>AI Cinematic Video Maker Pro</title>
   <style>
     :root { --bg: #020617; --accent: #8b5cf6; --text: #f8fafc; }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: env(safe-area-inset-top) 15px; display: flex; justify-content: center; overflow: hidden; }
     .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; height: 100vh; }
-    .video-viewport { width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 40px 100px rgba(0,0,0,0.9); }
-    
-    /* 動画タグ設定 */
-    #mp4Video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 0.8s ease; }
-    #mp4Video.active { opacity: 1; }
 
-    .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 100%); pointer-events: none; z-index: 15; }
-    .caption-box { position: absolute; bottom: 10%; left: 8%; right: 8%; padding: 16px; text-align: center; color: #fff; z-index: 25; font-size: 16px; font-weight: 800; line-height: 1.5; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none; background: rgba(10, 10, 25, 0.65); backdrop-filter: blur(10px); border-radius: 16px; border-left: 4px solid var(--accent); }
+    /* 9:16 シネマティックスクリーン */
+    .video-viewport {
+      width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px;
+      position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: 0 40px 100px rgba(0,0,0,0.9);
+    }
+    
+    video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1s ease; z-index: 1; }
+    video.active { opacity: 0.8; }
+
+    /* VFXレイヤー */
+    .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 100%); pointer-events: none; z-index: 10; }
+    .grain { position: absolute; inset: 0; background: url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_filmgrain.png'); opacity: 0.05; pointer-events: none; z-index: 11; animation: noise 0.2s infinite; }
+    @keyframes noise { 0% { transform:translate(0,0) } 50% { transform:translate(-1%,-1%) } }
+    
+    /* 進捗バー */
     .progress-container { position: absolute; top: 15px; left: 15px; right: 15px; height: 3px; background: rgba(255,255,255,0.15); border-radius: 10px; z-index: 30; }
-    .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.4s ease; }
+    .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.5s ease; box-shadow: 0 0 10px var(--accent); }
+
+    /* 字幕 */
+    .caption-box {
+      position: absolute; bottom: 10%; left: 8%; right: 8%; padding: 20px;
+      text-align: center; color: #fff; z-index: 25; font-size: 19px; font-weight: 900;
+      line-height: 1.6; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none;
+      background: rgba(10, 10, 25, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); border-left: 5px solid var(--accent);
+    }
+
+    /* UI操作 */
     .controls-panel { transition: 0.5s; }
-    .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
+    .controls-panel.hidden { max-height: 0; opacity: 0; pointer-events: none; transform: translateY(-20px); }
+    .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(10px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
+    input { width: 100%; padding: 16px; border-radius: 14px; border: 1px solid #475569; background: #000; color: white; font-size: 15px; margin-bottom: 10px; outline: none; }
     .main-btn { width: 100%; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 16px; font-weight: 800; font-size: 17px; cursor: pointer; box-shadow: 0 5px 20px rgba(139, 92, 246, 0.5); }
+    .status-msg { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 10px; font-family: monospace; letter-spacing: 1px; }
   </style>
 </head>
 <body>
+
 <div class="app-container">
   <div class="controls-panel" id="uiPanel">
     <div class="card">
-      <button class="main-btn" id="genBtn" onclick="playMovieSequence()">🎬 本格AI動画（MP4）を再生</button>
+      <input type="password" id="apiKey" placeholder="Google Gemini API Key">
+      <input type="text" id="topicInput" placeholder="動画のテーマ（例：海に沈む都市）">
+      <button class="main-btn" id="genBtn" onclick="startGeneration()">🎬 映画を構成・上映</button>
+      <div id="status" class="status-msg">READY.</div>
     </div>
   </div>
+  
   <div class="video-viewport" id="player">
     <div class="vignette"></div>
+    <div class="grain"></div>
     <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
-    
-    <!-- HTML5 Video タグ -->
-    <video id="mp4Video" playsinline muted preload="auto"></video>
-    
+    <video id="mp4Video" playsinline muted loop></video>
     <div id="caption" class="caption-box"></div>
   </div>
 </div>
 
 <script>
-  // 外部サービス（Hailuo / Luma / Runway）等で生成したMP4ファイルURL群をセット
-  const videoTimeline = [
-    {
-      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
-      text: "近未来の都市に舞い降りた、静けさと希望の光。"
-    },
-    {
-      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", 
-      text: "広大な世界が、新たなストーリーの幕開けを告げる。"
-    }
+  let timeline = [];
+  let isPlaying = false;
+  
+  // 無料で使える高品質な背景動画ストック（サンプル）
+  const stockVideos = [
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"
   ];
 
-  async function playMovieSequence() {
+  const apiKeyInput = document.getElementById('apiKey');
+  apiKeyInput.value = localStorage.getItem('video_mp4_key') || '';
+  apiKeyInput.addEventListener('change', () => localStorage.setItem('video_mp4_key', apiKeyInput.value.trim()));
+
+  async function startGeneration() {
+    const apiKey = apiKeyInput.value.trim();
+    const topic = document.getElementById('topicInput').value.trim();
+    if (!apiKey || !topic) return alert("入力してください");
+
+    const status = document.getElementById('status');
+    document.getElementById('genBtn').disabled = true;
+    status.textContent = "SEARCHING MODELS...";
+
+    try {
+      const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const mData = await mRes.json();
+      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b) => b.name.localeCompare(a.name));
+      const model = models.find(m => m.name.includes("flash")) || models[0];
+
+      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSONで作って。解説不要。{"scenes": [{"text": "短い台詞"}]}`;
+      
+      status.textContent = "COMPOSING STORY...";
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${model.name}:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+      });
+
+      const data = await response.json();
+      timeline = JSON.parse(data.candidates[0].content.parts[0].text.match(/\{[\s\S]*\}/)[0]).scenes;
+
+      document.getElementById('uiPanel').classList.add('hidden');
+      playMovie();
+    } catch (e) { alert(e.message); document.getElementById('genBtn').disabled = false; }
+  }
+
+  async function playMovie() {
+    isPlaying = true;
     const video = document.getElementById('mp4Video');
     const caption = document.getElementById('caption');
     const progressBar = document.getElementById('progressBar');
     
-    document.getElementById('uiPanel').style.display = 'none';
+    for (let i = 0; i < timeline.length; i++) {
+      const scene = timeline[i];
+      progressBar.style.width = `${((i + 1) / timeline.length) * 100}%`;
 
-    for (let i = 0; i < videoTimeline.length; i++) {
-      const scene = videoTimeline[i];
-      
-      // プログレスバーの更新
-      progressBar.style.width = `${((i + 1) / videoTimeline.length) * 100}%`;
-
-      // 動画ソースのセットとロード
-      video.src = scene.videoUrl;
+      // ストック動画をループ利用
+      video.src = stockVideos[i % stockVideos.length];
       video.load();
-      
-      // キャプション更新
       caption.textContent = scene.text;
       caption.style.display = 'block';
 
-      // 動画再生
       video.classList.add('active');
-      await video.play().catch(e => console.log("Autoplay check:", e));
+      await video.play().catch(e => console.warn(e));
 
-      // 音声読み上げと動画再生の同期をとるPromise
+      // 音声読み上げ
       await new Promise(resolve => {
-        let ttsFinished = false;
-        let videoFinished = false;
-
-        const checkEnd = () => {
-          if (ttsFinished && videoFinished) resolve();
-        };
-
-        // ナレーション（TTS）
         const u = new SpeechSynthesisUtterance(scene.text);
-        u.lang = 'ja-JP';
-        u.onend = () => { ttsFinished = true; checkEnd(); };
+        u.lang = 'ja-JP'; u.rate = 1.0; u.pitch = 0.8;
+        u.onend = resolve;
         window.speechSynthesis.speak(u);
-
-        // 動画ループまたは再生完了の検出
-        video.onended = () => { videoFinished = true; checkEnd(); };
-
-        // フォールバック（最長8秒で強制次シーンへ）
-        setTimeout(() => { resolve(); }, 8000);
+        setTimeout(resolve, 8000); // 安全装置
       });
 
       video.classList.remove('active');
-      await new Promise(r => setTimeout(r, 400)); // シーン間のトランジション
+      await new Promise(r => setTimeout(r, 800));
     }
-
-    location.reload(); // 再生完了後にリセット
+    location.reload();
   }
 </script>
 </body>
