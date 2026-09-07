@@ -3,225 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>AI Cinematic Video Maker Pro V6</title>
+  <title>AI MP4 Cinematic Video Player</title>
   <style>
     :root { --bg: #020617; --accent: #8b5cf6; --text: #f8fafc; }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: env(safe-area-inset-top) 15px; display: flex; justify-content: center; overflow: hidden; }
     .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; height: 100vh; }
-    .video-viewport { width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 40px 100px rgba(0,0,0,0.9); cursor: pointer; }
-    #glCanvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 1.5s ease; }
-    #glCanvas.active { opacity: 1; }
-    #particleCanvas { position: absolute; inset: 0; z-index: 10; pointer-events: none; mix-blend-mode: screen; opacity: 0.5; }
-    .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.9) 100%); pointer-events: none; z-index: 15; }
-    .flare-effect { position: absolute; top: 0; left: -150%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); z-index: 20; transform: skewX(-25deg); pointer-events: none; }
-    .flare-anim { animation: flareMove 1.8s ease-in-out forwards; }
-    @keyframes flareMove { from { left: -150%; } to { left: 150%; } }
-    .caption-box { position: absolute; bottom: 12%; left: 8%; right: 8%; padding: 18px; text-align: center; color: #fff; z-index: 25; font-size: 18px; font-weight: 800; line-height: 1.6; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none; background: rgba(10, 10, 25, 0.6); backdrop-filter: blur(10px); border-radius: 18px; border-left: 4px solid var(--accent); }
+    .video-viewport { width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 40px 100px rgba(0,0,0,0.9); }
+    
+    /* 動画タグ設定 */
+    #mp4Video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; opacity: 0; transition: opacity 0.8s ease; }
+    #mp4Video.active { opacity: 1; }
+
+    .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 100%); pointer-events: none; z-index: 15; }
+    .caption-box { position: absolute; bottom: 10%; left: 8%; right: 8%; padding: 16px; text-align: center; color: #fff; z-index: 25; font-size: 16px; font-weight: 800; line-height: 1.5; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none; background: rgba(10, 10, 25, 0.65); backdrop-filter: blur(10px); border-radius: 16px; border-left: 4px solid var(--accent); }
     .progress-container { position: absolute; top: 15px; left: 15px; right: 15px; height: 3px; background: rgba(255,255,255,0.15); border-radius: 10px; z-index: 30; }
     .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.4s ease; }
-    .controls-panel { transition: 0.5s; max-height: 600px; }
-    .controls-panel.hidden { max-height: 0; opacity: 0; pointer-events: none; transform: translateY(-20px); }
+    .controls-panel { transition: 0.5s; }
     .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
-    input, select { width: 100%; padding: 16px; border-radius: 14px; border: 1px solid #475569; background: #000; color: white; font-size: 15px; margin-bottom: 10px; outline: none; }
     .main-btn { width: 100%; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 16px; font-weight: 800; font-size: 17px; cursor: pointer; box-shadow: 0 5px 20px rgba(139, 92, 246, 0.5); }
-    .status-msg { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 10px; min-height: 1.2em; letter-spacing: 1px; font-family: monospace; }
   </style>
 </head>
 <body>
 <div class="app-container">
   <div class="controls-panel" id="uiPanel">
     <div class="card">
-      <input type="password" id="apiKey" placeholder="Gemini API Key">
-      <input type="text" id="topicInput" placeholder="動画のテーマを入力">
-      <select id="styleSelect">
-        <option value="cinematic photo, photorealistic, 8k, masterpiece, highly detailed">実写映画風</option>
-        <option value="anime style, makoto shinkai style, breathtaking scenery">アニメ風</option>
-        <option value="cyberpunk city, neon lighting, futuristic atmosphere">サイバーパンク</option>
-      </select>
-      <button class="main-btn" id="genBtn" onclick="startGeneration()">🎬 映像を構成する</button>
-      <div id="status" class="status-msg">READY.</div>
+      <button class="main-btn" id="genBtn" onclick="playMovieSequence()">🎬 本格AI動画（MP4）を再生</button>
     </div>
   </div>
   <div class="video-viewport" id="player">
     <div class="vignette"></div>
-    <div class="flare-effect" id="flare"></div>
     <div class="progress-container"><div class="progress-bar" id="progressBar"></div></div>
-    <canvas id="glCanvas"></canvas>
-    <canvas id="particleCanvas"></canvas>
+    
+    <!-- HTML5 Video タグ -->
+    <video id="mp4Video" playsinline muted preload="auto"></video>
+    
     <div id="caption" class="caption-box"></div>
   </div>
 </div>
 
 <script>
-  let timeline = [];
-  let isPlaying = false;
-  let audioCtx = null;
-  let bgmGain = null;
-  let gl, program, currentTexture, animFrameId, startTime;
-  let timeLoc, zoomLoc, moveLoc;
-
-  const apiKeyInput = document.getElementById('apiKey');
-  apiKeyInput.value = localStorage.getItem('video_v6_gl_key') || '';
-  apiKeyInput.addEventListener('change', () => localStorage.setItem('video_v6_gl_key', apiKeyInput.value.trim()));
-
-  // ----------------------------------------------------
-  // WebGL: 高度なシネマティックシェーダー
-  // ----------------------------------------------------
-  const vs = `attribute vec2 p;attribute vec2 t;varying vec2 v;void main(){gl_Position=vec4(p,0,1);v=t;}`;
-  const fs = `
-    precision mediump float;
-    uniform sampler2D s; uniform float t; uniform float z; uniform vec2 m; varying vec2 v;
-    void main(){
-      vec2 uv = v - 0.5;
-      float d = length(uv);
-      // 疑似3D歪みとパン
-      uv += sin(uv.yx * 15.0 + t) * 0.003; 
-      uv *= (1.0 / z);
-      uv += m * (1.0 - d * 0.5);
-      gl_FragColor = texture2D(s, uv + 0.5);
+  // 外部サービス（Hailuo / Luma / Runway）等で生成したMP4ファイルURL群をセット
+  const videoTimeline = [
+    {
+      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
+      text: "近未来の都市に舞い降りた、静けさと希望の光。"
+    },
+    {
+      videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4", 
+      text: "広大な世界が、新たなストーリーの幕開けを告げる。"
     }
-  `;
+  ];
 
-  function initGL() {
-    const c = document.getElementById('glCanvas');
-    gl = c.getContext('webgl');
-    if(!gl) return;
-    c.width = c.offsetWidth; c.height = c.offsetHeight;
-    const shader = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
-    program = gl.createProgram();
-    gl.attachShader(program, shader(gl.VERTEX_SHADER, vs));
-    gl.attachShader(program, shader(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(program); gl.useProgram(program);
+  async function playMovieSequence() {
+    const video = document.getElementById('mp4Video');
+    const caption = document.getElementById('caption');
+    const progressBar = document.getElementById('progressBar');
     
-    const buf = (data) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW); return b; };
-    const pBuf = buf([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]);
-    const pLoc = gl.getAttribLocation(program, "p");
-    gl.enableVertexAttribArray(pLoc); gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
-    
-    const tBuf = buf([0,1,1,1,0,0,0,0,1,1,1,0]);
-    const tLoc = gl.getAttribLocation(program, "t");
-    gl.enableVertexAttribArray(tLoc); gl.vertexAttribPointer(tLoc, 2, gl.FLOAT, false, 0, 0);
+    document.getElementById('uiPanel').style.display = 'none';
 
-    timeLoc = gl.getUniformLocation(program, "t");
-    zoomLoc = gl.getUniformLocation(program, "z");
-    moveLoc = gl.getUniformLocation(program, "m");
-  }
+    for (let i = 0; i < videoTimeline.length; i++) {
+      const scene = videoTimeline[i];
+      
+      // プログレスバーの更新
+      progressBar.style.width = `${((i + 1) / videoTimeline.length) * 100}%`;
 
-  function setTexture(img) {
-    if(currentTexture) gl.deleteTexture(currentTexture);
-    currentTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, currentTexture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-  }
+      // 動画ソースのセットとロード
+      video.src = scene.videoUrl;
+      video.load();
+      
+      // キャプション更新
+      caption.textContent = scene.text;
+      caption.style.display = 'block';
 
-  // ----------------------------------------------------
-  // 生成ロジック
-  // ----------------------------------------------------
-  async function startGeneration() {
-    const apiKey = apiKeyInput.value.trim();
-    const topic = document.getElementById('topicInput').value.trim();
-    if (!apiKey || !topic) return alert("入力を確認してください");
-    const status = document.getElementById('status');
-    document.getElementById('genBtn').disabled = true;
+      // 動画再生
+      video.classList.add('active');
+      await video.play().catch(e => console.log("Autoplay check:", e));
 
-    try {
-      status.textContent = "スキャン中...";
-      const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      const mData = await mRes.json();
-      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b) => b.name.localeCompare(a.name));
-      const lastModel = localStorage.getItem('working_model_v6');
-      const targetModels = lastModel ? [{name: lastModel}, ...models.filter(m => m.name !== lastModel)] : models;
-
-      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSONで作って。{"scenes": [{"text": "短い台詞", "img_prompt": "English visual description"}]}`;
-
-      let success = false;
-      for (const m of targetModels) {
-        status.textContent = `試行中: ${m.name.split('/').pop()}...`;
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${apiKey}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: "application/json" }
-            })
-          });
-          const data = await res.json();
-          // ★ここで'0'エラーをガード！
-          if (res.ok && data.candidates && data.candidates.length > 0) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            timeline = JSON.parse(rawText.match(/\{[\s\S]*\}/)[0]).scenes;
-            localStorage.setItem('working_model_v6', m.name);
-            success = true; break;
-          }
-        } catch (e) { continue; }
-      }
-
-      if (!success) throw new Error("AI制限中です。10分ほど待ってください。");
-      document.getElementById('uiPanel').classList.add('hidden');
-      initGL(); startBGM(); playMovie();
-    } catch (e) { alert(e.message); document.getElementById('genBtn').disabled = false; }
-  }
-
-  async function playMovie() {
-    isPlaying = true;
-    let step = 0;
-    const style = document.getElementById('styleSelect').value;
-    const canvas = document.getElementById('glCanvas');
-
-    while (step < timeline.length && isPlaying) {
-      const scene = timeline[step];
-      const flare = document.getElementById('flare');
-      document.getElementById('progressBar').style.width = `${((step + 1) / timeline.length) * 100}%`;
-      flare.classList.remove('flare-anim'); void flare.offsetWidth; flare.classList.add('flare-anim');
-
-      const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(scene.img_prompt + ", " + style)}?width=540&height=960&nologo=true&seed=${Math.floor(Math.random()*99999)}`;
-      const img = new Image(); img.crossOrigin = "anonymous";
-      await new Promise(r => { img.onload = r; img.onerror = r; img.src = imgUrl; });
-
-      setTexture(img);
-      canvas.classList.add('active');
-      document.getElementById('caption').textContent = scene.text;
-      document.getElementById('caption').style.display = 'block';
-
-      startTime = Date.now();
-      const render = () => {
-        if(!isPlaying) return;
-        const e = (Date.now() - startTime) / 1000;
-        gl.uniform1f(timeLoc, e);
-        gl.uniform1f(zoomLoc, 1.05 + e * 0.02);
-        gl.uniform2f(moveLoc, Math.sin(e*0.5)*0.02, Math.cos(e*0.4)*0.01);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-        animFrameId = requestAnimationFrame(render);
-      };
-      if(animFrameId) cancelAnimationFrame(animFrameId);
-      render();
-
+      // 音声読み上げと動画再生の同期をとるPromise
       await new Promise(resolve => {
-        const u = new SpeechSynthesisUtterance(scene.text);
-        u.lang = 'ja-JP'; u.onend = resolve;
-        window.speechSynthesis.speak(u);
-        setTimeout(resolve, 8000);
-      });
-      step++;
-      await new Promise(r => setTimeout(r, 800));
-    }
-    location.reload();
-  }
+        let ttsFinished = false;
+        let videoFinished = false;
 
-  function startBGM() {
-    audioCtx = new AudioContext();
-    bgmGain = audioCtx.createGain(); bgmGain.connect(audioCtx.destination);
-    bgmGain.gain.setValueAtTime(0, audioCtx.currentTime);
-    bgmGain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 4);
-    [55, 110, 164].forEach(f => {
-      const o = audioCtx.createOscillator(); o.type = 'triangle';
-      o.frequency.value = f; o.connect(bgmGain); o.start();
-    });
+        const checkEnd = () => {
+          if (ttsFinished && videoFinished) resolve();
+        };
+
+        // ナレーション（TTS）
+        const u = new SpeechSynthesisUtterance(scene.text);
+        u.lang = 'ja-JP';
+        u.onend = () => { ttsFinished = true; checkEnd(); };
+        window.speechSynthesis.speak(u);
+
+        // 動画ループまたは再生完了の検出
+        video.onended = () => { videoFinished = true; checkEnd(); };
+
+        // フォールバック（最長8秒で強制次シーンへ）
+        setTimeout(() => { resolve(); }, 8000);
+      });
+
+      video.classList.remove('active');
+      await new Promise(r => setTimeout(r, 400)); // シーン間のトランジション
+    }
+
+    location.reload(); // 再生完了後にリセット
   }
 </script>
 </body>
