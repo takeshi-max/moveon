@@ -10,7 +10,6 @@
     body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); padding: env(safe-area-inset-top) 15px; display: flex; justify-content: center; overflow: hidden; }
     .app-container { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 12px; height: 100vh; }
 
-    /* 9:16 シネマティックスクリーン */
     .video-viewport {
       width: 100%; aspect-ratio: 9 / 16; background: #000; border-radius: 36px;
       position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.15);
@@ -20,31 +19,26 @@
     video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1s ease; z-index: 1; }
     video.active { opacity: 0.8; }
 
-    /* VFXレイヤー */
     .vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 100%); pointer-events: none; z-index: 10; }
     .grain { position: absolute; inset: 0; background: url('https://upload.wikimedia.org/wikipedia/commons/7/76/1k_filmgrain.png'); opacity: 0.05; pointer-events: none; z-index: 11; animation: noise 0.2s infinite; }
     @keyframes noise { 0% { transform:translate(0,0) } 50% { transform:translate(-1%,-1%) } }
     
-    /* 進捗バー */
     .progress-container { position: absolute; top: 15px; left: 15px; right: 15px; height: 3px; background: rgba(255,255,255,0.15); border-radius: 10px; z-index: 30; }
-    .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.5s ease; box-shadow: 0 0 10px var(--accent); }
+    .progress-bar { height: 100%; width: 0%; background: var(--accent); border-radius: 10px; transition: width 0.5s ease; }
 
-    /* 字幕 */
     .caption-box {
       position: absolute; bottom: 10%; left: 8%; right: 8%; padding: 20px;
-      text-align: center; color: #fff; z-index: 25; font-size: 19px; font-weight: 900;
+      text-align: center; color: #fff; z-index: 25; font-size: 18px; font-weight: 800;
       line-height: 1.6; text-shadow: 0 2px 20px rgba(0,0,0,1); display: none;
-      background: rgba(10, 10, 25, 0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); border-left: 5px solid var(--accent);
+      background: rgba(10, 10, 25, 0.7); backdrop-filter: blur(12px); border-radius: 20px; border-left: 4px solid var(--accent);
     }
 
-    /* UI操作 */
     .controls-panel { transition: 0.5s; }
     .controls-panel.hidden { max-height: 0; opacity: 0; pointer-events: none; transform: translateY(-20px); }
-    .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(10px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
+    .card { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(12px); border-radius: 28px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); }
     input { width: 100%; padding: 16px; border-radius: 14px; border: 1px solid #475569; background: #000; color: white; font-size: 15px; margin-bottom: 10px; outline: none; }
     .main-btn { width: 100%; padding: 18px; background: var(--accent); color: white; border: none; border-radius: 16px; font-weight: 800; font-size: 17px; cursor: pointer; box-shadow: 0 5px 20px rgba(139, 92, 246, 0.5); }
-    .status-msg { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 10px; font-family: monospace; letter-spacing: 1px; }
+    .status-msg { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 10px; min-height: 1.2em; font-family: monospace; }
   </style>
 </head>
 <body>
@@ -53,7 +47,7 @@
   <div class="controls-panel" id="uiPanel">
     <div class="card">
       <input type="password" id="apiKey" placeholder="Google Gemini API Key">
-      <input type="text" id="topicInput" placeholder="動画のテーマ（例：海に沈む都市）">
+      <input type="text" id="topicInput" placeholder="動画のテーマを入力">
       <button class="main-btn" id="genBtn" onclick="startGeneration()">🎬 映画を構成・上映</button>
       <div id="status" class="status-msg">READY.</div>
     </div>
@@ -70,9 +64,6 @@
 
 <script>
   let timeline = [];
-  let isPlaying = false;
-  
-  // 無料で使える高品質な背景動画ストック（サンプル）
   const stockVideos = [
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
     "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
@@ -81,8 +72,8 @@
   ];
 
   const apiKeyInput = document.getElementById('apiKey');
-  apiKeyInput.value = localStorage.getItem('video_mp4_key') || '';
-  apiKeyInput.addEventListener('change', () => localStorage.setItem('video_mp4_key', apiKeyInput.value.trim()));
+  apiKeyInput.value = localStorage.getItem('video_mp4_key_v2') || '';
+  apiKeyInput.addEventListener('change', () => localStorage.setItem('video_mp4_key_v2', apiKeyInput.value.trim()));
 
   async function startGeneration() {
     const apiKey = apiKeyInput.value.trim();
@@ -90,33 +81,64 @@
     if (!apiKey || !topic) return alert("入力してください");
 
     const status = document.getElementById('status');
-    document.getElementById('genBtn').disabled = true;
-    status.textContent = "SEARCHING MODELS...";
+    const genBtn = document.getElementById('genBtn');
+    genBtn.disabled = true;
 
     try {
+      // 1. モデル一覧をスキャン（404エラー回避）
+      status.textContent = "SCANNING MODELS...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       const mData = await mRes.json();
+      if(!mRes.ok) throw new Error(mData.error?.message || "Key Error");
+
       const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b) => b.name.localeCompare(a.name));
-      const model = models.find(m => m.name.includes("flash")) || models[0];
 
-      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSONで作って。解説不要。{"scenes": [{"text": "短い台詞"}]}`;
+      const prompt = `テーマ「${topic}」でドラマチックな5シーンの動画台本をJSON形式で作って。{"scenes": [{"text": "短い台詞"}]}`;
       
-      status.textContent = "COMPOSING STORY...";
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${model.name}:generateContent?key=${apiKey}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
-      });
+      let success = false;
+      // 2. しらみつぶしにリトライ（空の回答＝安全制限も回避）
+      for (const m of models) {
+        status.textContent = `TRYING ${m.name.split('/').pop()}...`;
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              // 安全フィルターを解除（誤判定による空の回答を防止）
+              safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+              ],
+              generationConfig: { responseMimeType: "application/json" }
+            })
+          });
 
-      const data = await response.json();
-      timeline = JSON.parse(data.candidates[0].content.parts[0].text.match(/\{[\s\S]*\}/)[0]).scenes;
+          const data = await response.json();
+          // 回答(candidates)が存在するか厳密にチェック
+          if (response.ok && data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+            const rawText = data.candidates[0].content.parts[0].text;
+            timeline = JSON.parse(rawText.match(/\{[\s\S]*\}/)[0]).scenes;
+            success = true;
+            break;
+          }
+        } catch (e) { console.warn(m.name + " failed", e); continue; }
+      }
+
+      if (!success) throw new Error("AIが制限されているか、不適切な言葉が含まれています。10分待って再試行してください。");
 
       document.getElementById('uiPanel').classList.add('hidden');
       playMovie();
-    } catch (e) { alert(e.message); document.getElementById('genBtn').disabled = false; }
+
+    } catch (e) {
+      alert("エラー: " + e.message);
+      genBtn.disabled = false;
+    }
   }
 
   async function playMovie() {
-    isPlaying = true;
     const video = document.getElementById('mp4Video');
     const caption = document.getElementById('caption');
     const progressBar = document.getElementById('progressBar');
@@ -124,27 +146,23 @@
     for (let i = 0; i < timeline.length; i++) {
       const scene = timeline[i];
       progressBar.style.width = `${((i + 1) / timeline.length) * 100}%`;
-
-      // ストック動画をループ利用
       video.src = stockVideos[i % stockVideos.length];
       video.load();
       caption.textContent = scene.text;
       caption.style.display = 'block';
-
       video.classList.add('active');
       await video.play().catch(e => console.warn(e));
 
-      // 音声読み上げ
       await new Promise(resolve => {
         const u = new SpeechSynthesisUtterance(scene.text);
-        u.lang = 'ja-JP'; u.rate = 1.0; u.pitch = 0.8;
+        u.lang = 'ja-JP'; u.rate = 1.0;
         u.onend = resolve;
         window.speechSynthesis.speak(u);
-        setTimeout(resolve, 8000); // 安全装置
+        setTimeout(resolve, 8000); 
       });
 
       video.classList.remove('active');
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 600));
     }
     location.reload();
   }
