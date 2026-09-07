@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Auto Video Maker - Demo</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #8b5cf6;
+      --text: #f8fafc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* プレーヤー領域 (9:16 縦型ショート動画サイズ) */
+    .video-player {
+      width: 100%;
+      height: 480px;
+      background: #000;
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #334155;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .bg-image {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.7;
+      transition: opacity 0.5s ease;
+    }
+    .caption-overlay {
+      position: absolute;
+      bottom: 60px;
+      left: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.75);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      color: #fff;
+      border-left: 4px solid var(--accent);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }
+
+    /* コントロール */
+    .input-box { display: flex; gap: 8px; }
+    input {
+      flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155;
+      background: var(--card); color: #fff; outline: none;
+    }
+    button {
+      padding: 12px 20px; background: var(--accent); color: white;
+      border: none; border-radius: 8px; font-weight: bold; cursor: pointer;
+    }
+    button:active { opacity: 0.8; }
+    .export-btn {
+      background: #10b981; width: 100%; margin-top: 8px; padding: 14px; font-size: 16px;
+    }
+
+    /* タイムライン情報表示 */
+    .timeline-info {
+      background: var(--card); padding: 12px; border-radius: 8px; font-size: 13px; color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2 style="font-size: 20px; text-align: center;">🎬 AI ショート動画メーカー</h2>
+
+    <!-- 動画プレーヤー画面 -->
+    <div class="video-player">
+      <img id="bgImg" class="bg-image" src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600" alt="背景">
+      <div id="caption" class="caption-overlay">テーマを入力して「動画生成」を押してください</div>
+    </div>
+
+    <!-- テーマ入力 -->
+    <div class="input-box">
+      <input type="text" id="topicInput" placeholder="テーマ例: 宇宙の謎、AIの将来">
+      <button onclick="generateVideo()">生成</button>
+    </div>
+
+    <!-- タイムライン情報 -->
+    <div class="timeline-info" id="statusText">
+      ステータス: 待機中
+    </div>
+
+    <!-- 動画出力ボタン (API連携用) -->
+    <button class="export-btn" onclick="exportMp4()">クラウドで高画質MP4出力 (無料API)</button>
+  </div>
+
+  <script>
+    // 仮のAI生成タイムラインデータ（実際はGemini APIから取得）
+    const mockDatabase = {
+      "宇宙": [
+        { time: 0, text: "知っていましたか？ 宇宙の95%は解明されていません。", img: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600" },
+        { time: 3, text: "私たちが目に見える物質は、全体のたった5%だけです。", img: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=600" },
+        { time: 6, text: "残りは「ダークマター」と呼ばれる謎の存在なのです。", img: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=600" }
+      ]
+    };
+
+    let currentTimer = null;
+
+    function generateVideo() {
+      const topic = document.getElementById('topicInput').value || "宇宙";
+      const statusText = document.getElementById('statusText');
+      
+      statusText.textContent = `「${topic}」のAI台本・素材を構成中...`;
+
+      // 擬似的にAI生成待ちを再現
+      setTimeout(() => {
+        statusText.textContent = "プレビュー再生を開始します！";
+        playPreview(mockDatabase["宇宙"]);
+      }, 1000);
+    }
+
+    function playPreview(timeline) {
+      if (currentTimer) clearInterval(currentTimer);
+
+      let step = 0;
+      const updateStep = () => {
+        const item = timeline[step];
+        document.getElementById('caption').textContent = item.text;
+        document.getElementById('bgImg').src = item.img;
+
+        step = (step + 1) % timeline.length;
+      };
+
+      updateStep();
+      currentTimer = setInterval(updateStep, 3000); // 3秒ごとに切り替え
+    }
+
+    function exportMp4() {
+      alert("ここでShotstack API等のクラウドサービスにJSONを送信し、実際のMP4動画をレンダリング（合成）します！");
+    }
+  </script>
+</body>
+</html>
