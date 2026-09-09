@@ -23,7 +23,7 @@
   </div>
 
   <input type="password" id="geminiKey" placeholder="Gemini API Key">
-  <input type="text" id="topic" placeholder="例：プールではしゃいでいる、フレンチブルドッグ">
+  <input type="text" id="topic" placeholder="例：飛んでいるブルドッグ">
   <button id="startBtn" onclick="startApp()">🐾 動画を作成</button>
   <div id="status"></div>
 </div>
@@ -33,6 +33,39 @@
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d');
 
+  // 利用可能なGeminiモデルを自動検索する関数
+  async function getAvailableModel(apiKey) {
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const res = await fetch(listUrl);
+    const data = await res.json();
+
+    if (data.error) {
+      throw new Error(`[APIキーエラー] ${data.error.message}`);
+    }
+
+    if (!data.models || data.models.length === 0) {
+      throw new Error("利用可能なモデルが見つかりませんでした。");
+    }
+
+    // generateContentに対応しているモデルを抽出
+    const validModels = data.models.filter(m => 
+      m.supportedGenerationMethods && 
+      m.supportedGenerationMethods.includes("generateContent") &&
+      m.name.includes("gemini")
+    );
+
+    if (validModels.length === 0) {
+      throw new Error("文章生成(generateContent)に対応したGeminiモデルがありません。");
+    }
+
+    // flashモデルを優先、なければリストの先頭を使用
+    const flashModel = validModels.find(m => m.name.includes("flash"));
+    const selectedModel = flashModel ? flashModel.name : validModels[0].name;
+
+    // "models/gemini-xxx" の形式で返ってくるため、モデル名部分のみ抽出
+    return selectedModel.replace("models/", "");
+  }
+
   async function startApp() {
     const gKey = document.getElementById('geminiKey').value.trim();
     const topic = document.getElementById('topic').value.trim();
@@ -40,9 +73,14 @@
 
     if (!gKey || !topic) return alert("API Keyとテーマを入力してください");
 
-    status.textContent = "1/3 台本を作成中...";
+    try {
+      status.textContent = "0/3 利用可能なモデルを検索中...";
+      const modelName = await getAvailableModel(gKey);
+      console.log(`選択されたモデル: ${modelName}`);
 
-    const promptText = `テーマ「${topic}」でショート動画（4シーン）のシナリオを作ってください。
+      status.textContent = `1/3 台本を作成中 (${modelName})...`;
+
+      const promptText = `テーマ「${topic}」でショート動画（4シーン）のシナリオを作ってください。
 必ず以下のJSON形式のみで出力してください（余計な解説は不要）:
 {
   "scenes": [
@@ -50,11 +88,10 @@
   ]
 }`;
 
-    try {
-      // 最新の安定版モデルエンドポイントを使用
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`;
+      // 検索して取得したモデル名を使用
+      const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${gKey}`;
       
-      const res = await fetch(url, {
+      const res = await fetch(generateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64,7 +101,6 @@
 
       const data = await res.json();
 
-      // ★APIからのエラー応答を検知
       if (data.error) {
         throw new Error(`[APIエラー] Code: ${data.error.code} / Message: ${data.error.message}`);
       }
@@ -73,7 +109,6 @@
         throw new Error("AIから有効な応答が得られませんでした。");
       }
 
-      // レスポンスからテキストを抽出してJSONパース
       let rawText = data.candidates[0].content.parts[0].text;
       rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
       
