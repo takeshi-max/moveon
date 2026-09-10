@@ -2,21 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real Video Downloader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Real Video Downloader Pro</title>
   <style>
-    body { background: #0f172a; color: white; font-family: sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
+    body { background: #020617; color: white; font-family: sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
     .container { width: 100%; max-width: 400px; }
-    .video-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 20px; overflow: hidden; position: relative; border: 2px solid #f59e0b; margin-bottom: 10px; }
+    .video-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 24px; overflow: hidden; position: relative; border: 2px solid #38bdf8; margin-bottom: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
     video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
     video.active { opacity: 1; }
     .subtitle { position: absolute; bottom: 80px; width: 100%; text-align: center; color: white; font-size: 20px; font-weight: 900; text-shadow: 0 2px 10px #000; padding: 0 20px; box-sizing: border-box; z-index: 10; pointer-events: none; }
     input, button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-weight: bold; font-size: 15px; outline: none; }
     input { background: #1e293b; color: white; border: 1px solid #334155; }
-    button { background: #f59e0b; color: #000; cursor: pointer; }
-    #downloadArea { margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 12px; display: none; }
-    .dl-link { display: block; color: #38bdf8; text-decoration: none; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
-    #status { font-size: 11px; margin-top: 12px; color: #94a3b8; text-align: center; font-family: monospace; }
+    button { background: #38bdf8; color: #000; cursor: pointer; transition: 0.2s; }
+    button:active { transform: scale(0.98); }
+    button:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
+    #downloadArea { margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 12px; display: none; border: 1px solid #334155; }
+    .dl-link { display: block; color: #38bdf8; text-decoration: none; margin-bottom: 10px; font-size: 13px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+    #status { font-size: 11px; margin-top: 12px; color: #94a3b8; text-align: center; font-family: monospace; min-height: 1.2em; }
   </style>
 </head>
 <body>
@@ -27,51 +29,84 @@
     <div id="subtitle" class="subtitle"></div>
   </div>
 
-  <input type="password" id="geminiKey" placeholder="Gemini Key">
-  <input type="password" id="pexelsKey" placeholder="Pexels Key">
-  <input type="text" id="topic" placeholder="例：コーヒーを淹れる朝">
+  <input type="password" id="geminiKey" placeholder="Gemini API Key">
+  <input type="password" id="pexelsKey" placeholder="Pexels API Key">
+  <input type="text" id="topic" placeholder="例：静かな森でヨガ">
   <button id="startBtn" onclick="startApp()">🎥 動画を構成・素材取得</button>
   <div id="status">READY</div>
 
   <div id="downloadArea">
-    <div style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #f59e0b;">⬇️ 素材を個別に保存する</div>
+    <div style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #38bdf8;">⬇️ 素材を個別に保存する</div>
     <div id="links"></div>
-    <div style="font-size: 9px; color: #94a3b8; margin-top: 10px;">※iPhoneはリンク長押しで「リンク先のファイルをダウンロード」を選択してください。</div>
+    <div style="font-size: 9px; color: #94a3b8; margin-top: 10px;">※iPhoneはリンクを長押ししてダウンロードしてください。</div>
   </div>
 </div>
 
 <script>
-  document.getElementById('geminiKey').value = localStorage.getItem('g_key') || '';
-  document.getElementById('pexelsKey').value = localStorage.getItem('p_key') || '';
+  // 前回の入力を復元
+  const gKeyInput = document.getElementById('geminiKey');
+  const pKeyInput = document.getElementById('pexelsKey');
+  gKeyInput.value = localStorage.getItem('g_key_v10') || '';
+  pKeyInput.value = localStorage.getItem('p_key_v10') || '';
 
   async function startApp() {
-    const gKey = document.getElementById('geminiKey').value.trim();
-    const pKey = document.getElementById('pexelsKey').value.trim();
+    const gKey = gKeyInput.value.trim();
+    const pKey = pKeyInput.value.trim();
     const topic = document.getElementById('topic').value.trim();
     const status = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
 
-    if (!gKey || !pKey || !topic) return alert("入力を確認してください");
-    localStorage.setItem('g_key', gKey);
-    localStorage.setItem('p_key', pKey);
+    if (!gKey || !pKey || !topic) return alert("すべてのキーを入力してください");
+    
+    localStorage.setItem('g_key_v10', gKey);
+    localStorage.setItem('p_key_v10', pKey);
+    startBtn.disabled = true;
 
     try {
-      status.textContent = "AIモデル取得中...";
+      // 1. 利用可能なGeminiモデルをスキャン (404エラー回避)
+      status.textContent = "Scanning AI models...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${gKey}`);
       const mData = await mRes.json();
-      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b)=>b.name.localeCompare(a.name));
-      const targetModel = models.find(m => m.name.includes("flash")) || models[0];
+      if (!mRes.ok) throw new Error(mData.error?.message || "Gemini API Key Error");
 
-      status.textContent = "台本作成中...";
-      const prompt = `テーマ「${topic}」で3シーンの台本を作って。JSONのみ。{"scenes": [{"text": "字幕", "search_keyword": "English keyword"}]}`;
-      const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${targetModel.name}:generateContent?key=${gKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
-      });
-      const gData = await gRes.json();
-      const timeline = JSON.parse(gData.candidates[0].content.parts[0].text).scenes;
+      const models = mData.models
+        .filter(m => m.supportedGenerationMethods.includes("generateContent"))
+        .sort((a, b) => b.name.localeCompare(a.name));
 
-      status.textContent = "Pexelsから素材を厳選中...";
+      const prompt = `テーマ「${topic}」で3シーンの実写動画台本を作成してください。
+必ず以下のJSON形式のみで出力してください。
+{"scenes": [{"text": "日本語字幕", "search_keyword": "English keyword for Pexels"}]}`;
+
+      let timeline = null;
+      let success = false;
+
+      // 2. 使えるモデルを順に試す (undefinedエラー回避)
+      for (const m of models) {
+        status.textContent = `Connecting: ${m.name.split('/').pop()}...`;
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${gKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: "application/json" }
+            })
+          });
+          const data = await res.json();
+          
+          if (res.ok && data.candidates && data.candidates.length > 0) {
+            const rawText = data.candidates[0].content.parts[0].text;
+            timeline = JSON.parse(rawText.match(/\{.*\}/s)[0]).scenes;
+            success = true;
+            break;
+          }
+        } catch (e) { console.warn(m.name + " failed", e); continue; }
+      }
+
+      if (!success) throw new Error("利用可能なモデルがないか、制限がかかっています。10分待ってください。");
+
+      // 3. Pexelsから素材取得
+      status.textContent = "Fetching video assets...";
       const linksDiv = document.getElementById('links');
       linksDiv.innerHTML = '';
       
@@ -86,24 +121,26 @@
           const file = pData.videos[0].video_files.find(f => f.width >= 720) || pData.videos[0].video_files[0];
           scene.videoUrl = file.link;
           
-          // ダウンロードリンク作成
           const a = document.createElement('a');
           a.className = 'dl-link';
           a.href = file.link;
-          a.download = `scene_${i+1}.mp4`;
           a.target = '_blank';
-          a.innerText = `🎬 シーン${i+1}: ${scene.text} (保存)`;
+          a.innerText = `🎬 Scene ${i+1}: ${scene.text} (Save)`;
           linksDiv.appendChild(a);
+        } else {
+          throw new Error(`「${scene.search_keyword}」の動画が見つかりませんでした。別の言葉で試してください。`);
         }
       }
 
       document.getElementById('downloadArea').style.display = 'block';
-      status.textContent = "再生を開始します";
+      status.textContent = "Playing preview...";
       await playMovie(timeline);
 
     } catch (e) {
-      alert("エラー: " + e.message);
-      status.textContent = "ERROR";
+      alert("Error: " + e.message);
+      status.textContent = "STOPPED";
+    } finally {
+      startBtn.disabled = false;
     }
   }
 
@@ -119,14 +156,14 @@
       player.play();
       
       // 音声読み上げ
+      window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(scene.text);
       u.lang = 'ja-JP';
-      window.speechSynthesis.cancel();
       window.speechSynthesis.speak(u);
       
       await new Promise(r => setTimeout(r, 5000));
     }
-    document.getElementById('status').textContent = "DONE.";
+    document.getElementById('status').textContent = "COMPLETED.";
   }
 </script>
 </body>
