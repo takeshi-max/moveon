@@ -2,188 +2,131 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AIショート動画メーカー Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real Video Downloader</title>
   <style>
-    body { background: #0f172a; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow-x: hidden; }
-    .container { width: 100%; max-width: 400px; padding: 20px; box-sizing: border-box; }
-    .canvas-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 16px; overflow: hidden; position: relative; border: 2px solid #f59e0b; box-shadow: 0 0 20px rgba(245, 158, 11, 0.3); }
-    canvas { width: 100%; height: 100%; display: block; }
-    input, button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-weight: bold; box-sizing: border-box; font-size: 16px; outline: none; }
+    body { background: #0f172a; color: white; font-family: sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
+    .container { width: 100%; max-width: 400px; }
+    .video-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 20px; overflow: hidden; position: relative; border: 2px solid #f59e0b; margin-bottom: 10px; }
+    video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
+    video.active { opacity: 1; }
+    .subtitle { position: absolute; bottom: 80px; width: 100%; text-align: center; color: white; font-size: 20px; font-weight: 900; text-shadow: 0 2px 10px #000; padding: 0 20px; box-sizing: border-box; z-index: 10; pointer-events: none; }
+    input, button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-weight: bold; font-size: 15px; outline: none; }
     input { background: #1e293b; color: white; border: 1px solid #334155; }
-    button { background: #f59e0b; color: #000; cursor: pointer; margin-top: 15px; box-shadow: 0 4px 0 #b45309; }
-    button:active { transform: translateY(2px); box-shadow: none; }
-    button:disabled { background: #475569; box-shadow: none; cursor: not-allowed; color: #94a3b8; }
-    #status { font-size: 12px; margin-top: 15px; color: #94a3b8; text-align: center; min-height: 1.2em; font-family: monospace; }
+    button { background: #f59e0b; color: #000; cursor: pointer; }
+    #downloadArea { margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 12px; display: none; }
+    .dl-link { display: block; color: #38bdf8; text-decoration: none; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid #334155; padding-bottom: 4px; }
+    #status { font-size: 11px; margin-top: 12px; color: #94a3b8; text-align: center; font-family: monospace; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <div class="canvas-box">
-    <canvas id="stage" width="720" height="1280"></canvas>
+  <div class="video-box">
+    <video id="player" playsinline muted></video>
+    <div id="subtitle" class="subtitle"></div>
   </div>
 
-  <input type="password" id="geminiKey" placeholder="Gemini API Key">
-  <input type="text" id="topic" placeholder="例：月でお餅をつくウサギ">
-  <button id="startBtn" onclick="startApp()">🎬 動画を作成</button>
+  <input type="password" id="geminiKey" placeholder="Gemini Key">
+  <input type="password" id="pexelsKey" placeholder="Pexels Key">
+  <input type="text" id="topic" placeholder="例：コーヒーを淹れる朝">
+  <button id="startBtn" onclick="startApp()">🎥 動画を構成・素材取得</button>
   <div id="status">READY</div>
+
+  <div id="downloadArea">
+    <div style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #f59e0b;">⬇️ 素材を個別に保存する</div>
+    <div id="links"></div>
+    <div style="font-size: 9px; color: #94a3b8; margin-top: 10px;">※iPhoneはリンク長押しで「リンク先のファイルをダウンロード」を選択してください。</div>
+  </div>
 </div>
 
 <script>
-  let timeline = [];
-  const canvas = document.getElementById('stage');
-  const ctx = canvas.getContext('2d');
-  const startBtn = document.getElementById('startBtn');
-  const statusArea = document.getElementById('status');
-
-  // APIキーの保存
-  const keyInput = document.getElementById('geminiKey');
-  keyInput.value = localStorage.getItem('animal_video_key') || '';
-  keyInput.addEventListener('change', () => localStorage.setItem('animal_video_key', keyInput.value.trim()));
+  document.getElementById('geminiKey').value = localStorage.getItem('g_key') || '';
+  document.getElementById('pexelsKey').value = localStorage.getItem('p_key') || '';
 
   async function startApp() {
-    const gKey = keyInput.value.trim();
+    const gKey = document.getElementById('geminiKey').value.trim();
+    const pKey = document.getElementById('pexelsKey').value.trim();
     const topic = document.getElementById('topic').value.trim();
+    const status = document.getElementById('status');
 
-    if (!gKey || !topic) return alert("APIキーとテーマを入力してください");
+    if (!gKey || !pKey || !topic) return alert("入力を確認してください");
+    localStorage.setItem('g_key', gKey);
+    localStorage.setItem('p_key', pKey);
 
-    startBtn.disabled = true;
     try {
-      // 1. 利用可能なモデルをスキャン (404エラー回避)
-      statusArea.textContent = "SCANNING MODELS...";
+      status.textContent = "AIモデル取得中...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${gKey}`);
       const mData = await mRes.json();
-      if (!mRes.ok) throw new Error(mData.error?.message || "Invalid API Key");
+      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b)=>b.name.localeCompare(a.name));
+      const targetModel = models.find(m => m.name.includes("flash")) || models[0];
 
-      const models = mData.models
-        .filter(m => m.supportedGenerationMethods.includes("generateContent"))
-        .sort((a,b) => b.name.localeCompare(a.name));
+      status.textContent = "台本作成中...";
+      const prompt = `テーマ「${topic}」で3シーンの台本を作って。JSONのみ。{"scenes": [{"text": "字幕", "search_keyword": "English keyword"}]}`;
+      const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/${targetModel.name}:generateContent?key=${gKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+      });
+      const gData = await gRes.json();
+      const timeline = JSON.parse(gData.candidates[0].content.parts[0].text).scenes;
 
-      const promptText = `テーマ「${topic}」で、面白くて可愛いショート動画（4シーン）の台本を作成してください。
-必ず以下のJSON形式でのみ出力してください。
-{
-  "scenes": [
-    {"text": "日本語テロップ", "image_prompt": "English visual description for high quality image generation"}
-  ]
-}`;
-
-      let success = false;
-      // 2. モデルを順番に試行
-      for (const m of models) {
-        statusArea.textContent = `COMPOSING WITH ${m.name.split('/').pop()}...`;
-        try {
-          const generateUrl = `https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${gKey}`;
-          const res = await fetch(generateUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: promptText }] }],
-              generationConfig: { responseMimeType: "application/json" }
-            })
-          });
-
-          const data = await res.json();
-          if (res.ok && data.candidates && data.candidates[0].content) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            const parsedData = JSON.parse(rawText.match(/\{[\s\S]*\}/)[0]);
-            timeline = parsedData.scenes;
-            success = true;
-            break;
-          }
-        } catch (e) { continue; }
+      status.textContent = "Pexelsから素材を厳選中...";
+      const linksDiv = document.getElementById('links');
+      linksDiv.innerHTML = '';
+      
+      for (let i = 0; i < timeline.length; i++) {
+        const scene = timeline[i];
+        const pRes = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(scene.search_keyword)}&orientation=portrait&per_page=1`, {
+          headers: { Authorization: pKey }
+        });
+        const pData = await pRes.json();
+        
+        if (pData.videos?.length > 0) {
+          const file = pData.videos[0].video_files.find(f => f.width >= 720) || pData.videos[0].video_files[0];
+          scene.videoUrl = file.link;
+          
+          // ダウンロードリンク作成
+          const a = document.createElement('a');
+          a.className = 'dl-link';
+          a.href = file.link;
+          a.download = `scene_${i+1}.mp4`;
+          a.target = '_blank';
+          a.innerText = `🎬 シーン${i+1}: ${scene.text} (保存)`;
+          linksDiv.appendChild(a);
+        }
       }
 
-      if (!success) throw new Error("利用可能なモデルがないか、制限中です。10分待ってください。");
-
-      statusArea.textContent = "GENERATING VISUALS...";
-      await preloadImages();
-
-      statusArea.textContent = "PLAYING...";
-      await playMovie();
+      document.getElementById('downloadArea').style.display = 'block';
+      status.textContent = "再生を開始します";
+      await playMovie(timeline);
 
     } catch (e) {
       alert("エラー: " + e.message);
-      statusArea.textContent = "ERROR";
-    } finally {
-      startBtn.disabled = false;
+      status.textContent = "ERROR";
     }
   }
 
-  async function preloadImages() {
-    for (let i = 0; i < timeline.length; i++) {
-      const scene = timeline[i];
-      // 高品質化のための追加プロンプト
-      const encodedPrompt = encodeURIComponent(`${scene.image_prompt}, cinematic lighting, detailed anime art style`);
-      const imgUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=720&height=1280&nologo=true&seed=${Math.floor(Math.random()*9999)}`;
-      
-      scene.imgObj = new Image();
-      scene.imgObj.crossOrigin = "anonymous";
-
-      await new Promise(resolve => {
-        scene.imgObj.onload = () => { scene.isLoaded = true; resolve(); };
-        scene.imgObj.onerror = () => { scene.isLoaded = false; resolve(); };
-        scene.imgObj.src = imgUrl;
-      });
-    }
-  }
-
-  async function playMovie() {
+  async function playMovie(timeline) {
+    const player = document.getElementById('player');
+    const subtitle = document.getElementById('subtitle');
     for (let scene of timeline) {
-      const uttr = new SpeechSynthesisUtterance(scene.text);
-      uttr.lang = 'ja-JP';
-      uttr.rate = 1.1;
-
-      let isSpeaking = true;
-      uttr.onend = () => { isSpeaking = false; };
-      uttr.onerror = () => { isSpeaking = false; };
-
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(uttr);
-
-      const startTime = Date.now();
+      player.classList.remove('active');
+      player.src = scene.videoUrl;
+      await new Promise(r => player.oncanplay = r);
+      subtitle.textContent = scene.text;
+      player.classList.add('active');
+      player.play();
       
-      await new Promise(resolve => {
-        function render() {
-          const elapsed = (Date.now() - startTime) / 1000;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          if (scene.imgObj && scene.isLoaded) {
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            // ズームアニメーションを滑らかに
-            const scale = 1.0 + (elapsed * 0.05);
-            ctx.scale(scale, scale);
-            ctx.drawImage(scene.imgObj, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
-            ctx.restore();
-          }
-
-          // シネマティックなビネット（周辺減光）
-          const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.height/1.2);
-          grad.addColorStop(0, 'rgba(0,0,0,0)');
-          grad.addColorStop(1, 'rgba(0,0,0,0.5)');
-          ctx.fillStyle = grad;
-          ctx.fillRect(0,0,canvas.width, canvas.height);
-
-          // テロップ（縁取り付き）
-          ctx.fillStyle = "white";
-          ctx.strokeStyle = "black";
-          ctx.lineWidth = 12;
-          ctx.font = "900 54px sans-serif";
-          ctx.textAlign = "center";
-          ctx.strokeText(scene.text, canvas.width / 2, canvas.height - 180);
-          ctx.fillText(scene.text, canvas.width / 2, canvas.height - 180);
-
-          if (isSpeaking || elapsed < 3.5) {
-            requestAnimationFrame(render);
-          } else {
-            resolve();
-          }
-        }
-        render();
-      });
+      // 音声読み上げ
+      const u = new SpeechSynthesisUtterance(scene.text);
+      u.lang = 'ja-JP';
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+      
+      await new Promise(r => setTimeout(r, 5000));
     }
-    statusArea.textContent = "FINISH!";
+    document.getElementById('status').textContent = "DONE.";
   }
 </script>
 </body>
