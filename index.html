@@ -3,22 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Real Video Downloader Pro</title>
+  <title>Real Video Saver Pro</title>
   <style>
     body { background: #020617; color: white; font-family: sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
-    .container { width: 100%; max-width: 400px; }
-    .video-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 24px; overflow: hidden; position: relative; border: 2px solid #38bdf8; margin-bottom: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .container { width: 100%; max-width: 400px; padding-bottom: 50px; }
+    .video-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 24px; overflow: hidden; position: relative; border: 2px solid #38bdf8; margin-bottom: 10px; }
     video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
     video.active { opacity: 1; }
-    .subtitle { position: absolute; bottom: 80px; width: 100%; text-align: center; color: white; font-size: 20px; font-weight: 900; text-shadow: 0 2px 10px #000; padding: 0 20px; box-sizing: border-box; z-index: 10; pointer-events: none; }
-    input, button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-weight: bold; font-size: 15px; outline: none; }
+    .subtitle { position: absolute; bottom: 80px; width: 100%; text-align: center; color: white; font-size: 18px; font-weight: bold; text-shadow: 0 2px 10px #000; padding: 0 20px; z-index: 10; pointer-events: none; }
+    input, button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-weight: bold; font-size: 14px; outline: none; }
     input { background: #1e293b; color: white; border: 1px solid #334155; }
-    button { background: #38bdf8; color: #000; cursor: pointer; transition: 0.2s; }
-    button:active { transform: scale(0.98); }
-    button:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
-    #downloadArea { margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 12px; display: none; border: 1px solid #334155; }
-    .dl-link { display: block; color: #38bdf8; text-decoration: none; margin-bottom: 10px; font-size: 13px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
-    #status { font-size: 11px; margin-top: 12px; color: #94a3b8; text-align: center; font-family: monospace; min-height: 1.2em; }
+    button { background: #38bdf8; color: #000; cursor: pointer; }
+    #downloadArea { margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 16px; display: none; border: 1px solid #334155; }
+    .dl-item { background: #0f172a; padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #334155; }
+    .dl-link { display: inline-block; color: #38bdf8; text-decoration: none; font-size: 13px; font-weight: bold; margin-bottom: 5px; }
+    .copy-btn { background: #475569; color: white; padding: 6px; font-size: 10px; width: auto; margin-top: 5px; }
+    #status { font-size: 11px; margin-top: 12px; color: #94a3b8; text-align: center; min-height: 1.2em; }
+    .reset-btn { background: #e11d48; color: white; margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -29,86 +30,73 @@
     <div id="subtitle" class="subtitle"></div>
   </div>
 
-  <input type="password" id="geminiKey" placeholder="Gemini API Key">
-  <input type="password" id="pexelsKey" placeholder="Pexels API Key">
-  <input type="text" id="topic" placeholder="例：静かな森でヨガ">
-  <button id="startBtn" onclick="startApp()">🎥 動画を構成・素材取得</button>
+  <div id="inputArea">
+    <input type="password" id="geminiKey" placeholder="Gemini API Key">
+    <input type="password" id="pexelsKey" placeholder="Pexels API Key">
+    <input type="text" id="topic" placeholder="例：コーヒーを淹れる朝">
+    <button id="startBtn" onclick="startApp()">🎥 動画を作成・素材を表示</button>
+  </div>
+  
   <div id="status">READY</div>
 
   <div id="downloadArea">
-    <div style="font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #38bdf8;">⬇️ 素材を個別に保存する</div>
+    <div style="font-size: 13px; font-weight: bold; margin-bottom: 12px; color: #38bdf8; text-align: center;">⬇️ 素材を保存してSNSへ</div>
     <div id="links"></div>
-    <div style="font-size: 9px; color: #94a3b8; margin-top: 10px;">※iPhoneはリンクを長押ししてダウンロードしてください。</div>
+    <button class="reset-btn" onclick="location.reload()">🗑️ 画面をリセットして新しく作る</button>
   </div>
 </div>
 
 <script>
-  // 前回の入力を復元
   const gKeyInput = document.getElementById('geminiKey');
   const pKeyInput = document.getElementById('pexelsKey');
-  gKeyInput.value = localStorage.getItem('g_key_v10') || '';
-  pKeyInput.value = localStorage.getItem('p_key_v10') || '';
+  gKeyInput.value = localStorage.getItem('g_key_v11') || '';
+  pKeyInput.value = localStorage.getItem('p_key_v11') || '';
 
   async function startApp() {
     const gKey = gKeyInput.value.trim();
     const pKey = pKeyInput.value.trim();
     const topic = document.getElementById('topic').value.trim();
     const status = document.getElementById('status');
-    const startBtn = document.getElementById('startBtn');
 
-    if (!gKey || !pKey || !topic) return alert("すべてのキーを入力してください");
+    if (!gKey || !pKey || !topic) return alert("情報を入力してください");
     
-    localStorage.setItem('g_key_v10', gKey);
-    localStorage.setItem('p_key_v10', pKey);
-    startBtn.disabled = true;
+    localStorage.setItem('g_key_v11', gKey);
+    localStorage.setItem('p_key_v11', pKey);
+    document.getElementById('inputArea').style.display = 'none';
 
     try {
-      // 1. 利用可能なGeminiモデルをスキャン (404エラー回避)
-      status.textContent = "Scanning AI models...";
+      status.textContent = "AIモデルを選択中...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${gKey}`);
       const mData = await mRes.json();
-      if (!mRes.ok) throw new Error(mData.error?.message || "Gemini API Key Error");
-
-      const models = mData.models
-        .filter(m => m.supportedGenerationMethods.includes("generateContent"))
-        .sort((a, b) => b.name.localeCompare(a.name));
-
-      const prompt = `テーマ「${topic}」で3シーンの実写動画台本を作成してください。
-必ず以下のJSON形式のみで出力してください。
-{"scenes": [{"text": "日本語字幕", "search_keyword": "English keyword for Pexels"}]}`;
+      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a, b) => b.name.localeCompare(a.name));
 
       let timeline = null;
       let success = false;
 
-      // 2. 使えるモデルを順に試す (undefinedエラー回避)
       for (const m of models) {
-        status.textContent = `Connecting: ${m.name.split('/').pop()}...`;
+        status.textContent = `構成案を作成中 (${m.name.split('/').pop()})...`;
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${gKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
+              contents: [{ parts: [{ text: `テーマ「${topic}」で3シーンの実写動画台本をJSON形式で作成。{"scenes": [{"text": "字幕", "search_keyword": "English"}]}` }] }],
               generationConfig: { responseMimeType: "application/json" }
             })
           });
           const data = await res.json();
-          
-          if (res.ok && data.candidates && data.candidates.length > 0) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            timeline = JSON.parse(rawText.match(/\{.*\}/s)[0]).scenes;
+          if (res.ok && data.candidates?.[0]?.content) {
+            timeline = JSON.parse(data.candidates[0].content.parts[0].text.match(/\{.*\}/s)[0]).scenes;
             success = true;
             break;
           }
-        } catch (e) { console.warn(m.name + " failed", e); continue; }
+        } catch (e) { continue; }
       }
 
-      if (!success) throw new Error("利用可能なモデルがないか、制限がかかっています。10分待ってください。");
+      if (!success) throw new Error("AIが制限されています。10分待ってください。");
 
-      // 3. Pexelsから素材取得
-      status.textContent = "Fetching video assets...";
+      status.textContent = "Pexelsから高画質動画を探しています...";
       const linksDiv = document.getElementById('links');
-      linksDiv.innerHTML = '';
       
       for (let i = 0; i < timeline.length; i++) {
         const scene = timeline[i];
@@ -121,26 +109,24 @@
           const file = pData.videos[0].video_files.find(f => f.width >= 720) || pData.videos[0].video_files[0];
           scene.videoUrl = file.link;
           
-          const a = document.createElement('a');
-          a.className = 'dl-link';
-          a.href = file.link;
-          a.target = '_blank';
-          a.innerText = `🎬 Scene ${i+1}: ${scene.text} (Save)`;
-          linksDiv.appendChild(a);
-        } else {
-          throw new Error(`「${scene.search_keyword}」の動画が見つかりませんでした。別の言葉で試してください。`);
+          // ダウンロードアイテムの作成
+          const item = document.createElement('div');
+          item.className = 'dl-item';
+          item.innerHTML = `
+            <div style="font-size:11px; margin-bottom:5px;">シーン ${i+1}: ${scene.text}</div>
+            <a class="dl-link" href="${file.link}" target="_blank" rel="noopener">📥 動画を開く・保存</a><br>
+            <button class="copy-btn" onclick="copyUrl('${file.link}')">🔗 URLをコピー</button>
+          `;
+          linksDiv.appendChild(item);
         }
       }
 
       document.getElementById('downloadArea').style.display = 'block';
-      status.textContent = "Playing preview...";
       await playMovie(timeline);
 
     } catch (e) {
-      alert("Error: " + e.message);
-      status.textContent = "STOPPED";
-    } finally {
-      startBtn.disabled = false;
+      alert(e.message);
+      document.getElementById('inputArea').style.display = 'block';
     }
   }
 
@@ -155,7 +141,6 @@
       player.classList.add('active');
       player.play();
       
-      // 音声読み上げ
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(scene.text);
       u.lang = 'ja-JP';
@@ -163,7 +148,11 @@
       
       await new Promise(r => setTimeout(r, 5000));
     }
-    document.getElementById('status').textContent = "COMPLETED.";
+    document.getElementById('status').textContent = "プレビュー再生終了。下から保存してください。";
+  }
+
+  function copyUrl(url) {
+    navigator.clipboard.writeText(url).then(() => alert("URLをコピーしました！ブラウザの別タブや保存アプリで開いてください。"));
   }
 </script>
 </body>
