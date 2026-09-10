@@ -3,25 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Real Video Saver Pro V14</title>
+  <title>Real Video Saver Pro V15</title>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
     body { background: #020617; color: white; font-family: sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
     .container { width: 100%; max-width: 400px; padding-bottom: 50px; }
     .video-box { width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 24px; overflow: hidden; position: relative; border: 2px solid #38bdf8; margin-bottom: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
     video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
-    video.active { opacity: 0.85; }
+    video.active { opacity: 1; }
     .subtitle { position: absolute; bottom: 80px; width: 100%; text-align: center; color: white; font-size: 20px; font-weight: bold; text-shadow: 0 2px 10px #000; padding: 0 20px; z-index: 10; pointer-events: none; }
     
     input, button { width: 100%; padding: 14px; margin-top: 10px; border-radius: 12px; border: none; font-weight: bold; font-size: 14px; outline: none; }
     input { background: #1e293b; color: white; border: 1px solid #334155; }
     button { background: #38bdf8; color: #000; cursor: pointer; transition: 0.2s; }
     button:active { transform: scale(0.98); }
-    button:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
 
     #downloadArea { margin-top: 20px; background: #1e293b; padding: 15px; border-radius: 16px; display: none; border: 1px solid #334155; }
     .dl-item { background: #0f172a; padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #334155; }
-    .dl-link { display: inline-block; color: #38bdf8; text-decoration: none; font-size: 13px; font-weight: bold; margin-bottom: 5px; }
+    .dl-link { display: inline-block; color: #38bdf8; text-decoration: none; font-size: 14px; font-weight: bold; margin-bottom: 5px; padding: 5px 0; }
     
     .status-msg { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 12px; font-family: monospace; min-height: 1.2em; }
     .debug-log { font-size: 9px; color: #475569; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; margin-top: 15px; white-space: pre-wrap; display: none; }
@@ -38,7 +37,7 @@
   <div id="inputArea">
     <input type="password" id="geminiKey" placeholder="Gemini API Key">
     <input type="password" id="pexelsKey" placeholder="Pexels API Key">
-    <input type="text" id="topic" placeholder="テーマを入力（例：滝、森の朝）">
+    <input type="text" id="topic" placeholder="テーマを入力（例：海の夕日）">
     <button id="startBtn" onclick="startApp()">🎬 動画を構成・素材を取得</button>
   </div>
   
@@ -48,110 +47,67 @@
   <div id="downloadArea">
     <div style="font-size: 13px; font-weight: bold; margin-bottom: 12px; color: #38bdf8; text-align: center;">⬇️ 素材を個別に保存</div>
     <div id="links"></div>
-    <button style="background: #e11d48; color:white;" onclick="location.reload()">🗑️ 最初から作り直す</button>
+    <button style="background: #e11d48; color:white; margin-top:10px;" onclick="location.reload()">🗑️ 画面をリセットしてやり直す</button>
   </div>
 </div>
 
 <script>
-  // 保存されたキーを読み込み
   const gKeyInput = document.getElementById('geminiKey');
   const pKeyInput = document.getElementById('pexelsKey');
-  gKeyInput.value = localStorage.getItem('g_key_v14') || '';
-  pKeyInput.value = localStorage.getItem('p_key_v14') || '';
+  gKeyInput.value = localStorage.getItem('g_key_v15') || '';
+  pKeyInput.value = localStorage.getItem('p_key_v15') || '';
 
   function log(msg) {
     const dbg = document.getElementById('debugLog');
     dbg.style.display = 'block';
     dbg.textContent += msg + "\n";
-    console.log(msg);
   }
 
   async function startApp() {
     const gKey = gKeyInput.value.trim();
     const pKey = pKeyInput.value.trim();
     const topic = document.getElementById('topic').value.trim();
-    const status = document.getElementById('status');
-    const startBtn = document.getElementById('startBtn');
-
     if (!gKey || !pKey || !topic) return alert("情報を入力してください");
     
-    localStorage.setItem('g_key_v14', gKey);
-    localStorage.setItem('p_key_v14', pKey);
+    localStorage.setItem('g_key_v15', gKey);
+    localStorage.setItem('p_key_v15', pKey);
     document.getElementById('debugLog').textContent = "";
-    startBtn.disabled = true;
+    document.getElementById('startBtn').disabled = true;
 
     try {
-      // 1. 利用可能なモデルのリストを取得
-      log("1. 利用可能なAIモデルをスキャン中...");
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${gKey}`);
       const mData = await mRes.json();
+      const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a, b) => b.name.localeCompare(a.name));
+      const lastModel = localStorage.getItem('last_success_video_model') || models[0].name;
+
+      const prompt = `テーマ「${topic}」で3シーンの実写動画台本を作って。JSONのみ。{"scenes": [{"text": "字幕", "search_keyword": "English keyword"}]}`;
       
-      if (!mRes.ok || !mData.models) {
-        throw new Error(mData.error?.message || "APIキーが無効です。");
-      }
-
-      // generateContentができるモデルを抽出し、最新順にソート
-      const models = mData.models
-        .filter(m => m.supportedGenerationMethods.includes("generateContent"))
-        .sort((a, b) => b.name.localeCompare(a.name));
-
-      // 記憶している成功モデルを優先
-      const lastModel = localStorage.getItem('last_success_video_model');
-      const targetModels = lastModel ? [{name: lastModel}, ...models.filter(m => m.name !== lastModel)] : models;
-
-      log(`2. ${models.length}個のモデルを検知しました。`);
-
-      const prompt = `テーマ「${topic}」で3シーンの実写動画台本を作って。JSON形式のみ出力。解説不要。
-{"scenes": [{"text": "字幕", "search_keyword": "English keyword"}]}`;
-
       let timeline = null;
       let success = false;
 
-      // 2. 成功するまでしらみつぶしに試す
-      for (const m of targetModels) {
-        log(`▶ 試行中: ${m.name.split('/').pop()}...`);
-        status.textContent = `構成案を作成中...`;
-
+      for (const m of [{name: lastModel}, ...models]) {
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${gKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              // 安全制限をすべて解除（富士山などの誤ブロックを防ぐ）
-              safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-              ],
+              safetySettings: [{ category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }],
               generationConfig: { responseMimeType: "application/json" }
             })
           });
-
           const data = await res.json();
-          
-          if (res.ok && data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
-            const rawText = data.candidates[0].content.parts[0].text;
-            timeline = JSON.parse(rawText.match(/\{.*\}/s)[0]).scenes;
+          if (res.ok && data.candidates?.[0]?.content) {
+            timeline = JSON.parse(data.candidates[0].content.parts[0].text.match(/\{.*\}/s)[0]).scenes;
             localStorage.setItem('last_success_video_model', m.name);
-            log(`✅ 成功モデル: ${m.name}`);
-            success = true;
-            break;
-          } else {
-            log(`  × 拒否されました (原因: ${data.error?.status || '回答なし'})`);
+            success = true; break;
           }
-        } catch (e) {
-          log(`  × エラー: ${e.message}`);
-          continue; 
-        }
+        } catch (e) { continue; }
       }
 
-      if (!success) throw new Error("現在Googleの無料枠制限がかかっています。10分ほど待ってください。");
+      if (!success) throw new Error("AIが制限されています。10分ほど待ってください。");
 
-      // 3. Pexelsから素材取得
       document.getElementById('inputArea').style.display = 'none';
-      status.textContent = "高画質素材を取得中...";
       const linksDiv = document.getElementById('links');
       linksDiv.innerHTML = '';
       
@@ -165,12 +121,11 @@
         if (pData.videos?.length > 0) {
           const file = pData.videos[0].video_files.find(f => f.width >= 720) || pData.videos[0].video_files[0];
           scene.videoUrl = file.link;
-          
           const item = document.createElement('div');
           item.className = 'dl-item';
           item.innerHTML = `
             <div style="font-size:11px; margin-bottom:5px;">シーン ${i+1}: ${scene.text}</div>
-            <a class="dl-link" href="${file.link}" target="_blank">📥 動画を別タブで開いて保存</a>
+            <a class="dl-link" href="${file.link}" target="_blank" download="video_${i+1}.mp4">📥 保存・ダウンロード</a>
           `;
           linksDiv.appendChild(item);
         }
@@ -182,7 +137,7 @@
 
     } catch (e) {
       alert(e.message);
-      startBtn.disabled = false;
+      document.getElementById('startBtn').disabled = false;
     }
   }
 
@@ -196,15 +151,12 @@
       subtitle.textContent = scene.text;
       player.classList.add('active');
       player.play();
-      
       window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(scene.text);
-      u.lang = 'ja-JP';
-      window.speechSynthesis.speak(u);
-      
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(scene.text));
       await new Promise(r => setTimeout(r, 5000));
     }
     document.getElementById('status').textContent = "上映終了。下から保存してください。";
+    // ★ location.reload() を削除しました。これで画面が維持されます。
   }
 </script>
 </body>
