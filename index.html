@@ -3,64 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Real Video Studio Pro V18</title>
+  <title>Real Video Studio Pro V19</title>
   <style>
     * { box-sizing: border-box; touch-action: manipulation; }
     body { background: #020617; color: white; font-family: -apple-system, sans-serif; display: flex; justify-content: center; padding: 20px; margin: 0; }
     .container { width: 100%; max-width: 400px; padding-bottom: 50px; }
-    
     .video-box { 
       width: 100%; aspect-ratio: 9/16; background: #000; border-radius: 28px; 
       overflow: hidden; position: relative; border: 3px solid #f59e0b; 
       margin-bottom: 10px; box-shadow: 0 10px 40px rgba(245, 158, 11, 0.4); 
     }
-    
     video { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
-    video.active { opacity: 0.9; }
-    
+    video.active { opacity: 1; } /* iPhone用に透明度を調整 */
     .subtitle { 
       position: absolute; bottom: 80px; width: 100%; text-align: center; 
-      color: #fef08a; font-size: 22px; font-weight: 900; 
+      color: #fef08a; font-size: 20px; font-weight: 900; 
       text-shadow: 0 4px 12px #000; padding: 0 20px; z-index: 10; 
       pointer-events: none; line-height: 1.4;
     }
-    
     input, button { width: 100%; padding: 16px; margin-top: 10px; border-radius: 16px; border: none; font-weight: bold; font-size: 15px; outline: none; }
     input { background: #1e293b; color: white; border: 1px solid #334155; }
-    
-    /* 楽しそうなオレンジボタン */
     .btn-main { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #000; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 0 #9a3412; }
     .btn-main:active { transform: translateY(4px); box-shadow: none; }
-    
     #downloadArea { margin-top: 20px; background: rgba(30, 41, 59, 0.8); padding: 18px; border-radius: 20px; display: none; border: 1px solid #334155; }
     .dl-item { background: #0f172a; padding: 12px; border-radius: 14px; margin-bottom: 10px; border-left: 5px solid #f59e0b; }
     .dl-link { display: inline-block; color: #38bdf8; text-decoration: none; font-size: 14px; font-weight: bold; }
-    
     .status-msg { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 15px; font-family: monospace; }
   </style>
 </head>
-<body onclick="initAudio()">
+<body>
 
 <div class="app-container">
   <div class="container">
     <div class="video-box">
-      <video id="player" playsinline></video>
+      <!-- iPhone用に属性を強化 -->
+      <video id="player" playsinline webkit-playsinline></video>
       <div id="subtitle" class="subtitle"></div>
     </div>
 
     <div id="inputArea">
       <input type="password" id="geminiKey" placeholder="Gemini API Key">
       <input type="password" id="pexelsKey" placeholder="Pexels API Key">
-      <input type="text" id="topic" placeholder="例：最高に盛り上がるダンスパーティー">
-      <button id="startBtn" class="btn-main" onclick="startApp()">🎬 爆笑動画を構成＆上映！</button>
+      <input type="text" id="topic" placeholder="例：世界一幸せなゴールデンレトリバー">
+      <button id="startBtn" class="btn-main" onclick="startApp()">🎬 動画を作成</button>
     </div>
     
-    <div id="status" class="status-msg">TAP SCREEN TO UNLOCK AUDIO</div>
+    <div id="status" class="status-msg">READY</div>
 
     <div id="downloadArea">
-      <div style="font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #f59e0b; text-align: center;">⬇️ この動画素材を保存</div>
       <div id="links"></div>
-      <button style="background: #475569; color:white; font-size: 12px;" onclick="location.reload()">🗑️ 別のを作る</button>
+      <button style="background: #475569; color:white;" onclick="location.reload()">🗑️ 別のを作る</button>
     </div>
   </div>
 </div>
@@ -68,101 +60,53 @@
 <script>
   const gKeyInput = document.getElementById('geminiKey');
   const pKeyInput = document.getElementById('pexelsKey');
-  gKeyInput.value = localStorage.getItem('g_key_v18') || '';
-  pKeyInput.value = localStorage.getItem('p_key_v18') || '';
+  gKeyInput.value = localStorage.getItem('g_key_v19') || '';
+  pKeyInput.value = localStorage.getItem('p_key_v19') || '';
 
   let audioCtx = null;
   let rhythmInterval = null;
-
-  // 🎻 Web Audioによる「ノリノリBGM」生成
-  function initAudio() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      document.getElementById('status').textContent = "AUDIO UNLOCKED";
-    }
-  }
-
-  function playBeat() {
-    if (!audioCtx || audioCtx.state === 'suspended') audioCtx.resume();
-    let step = 0;
-    rhythmInterval = setInterval(() => {
-      const now = audioCtx.currentTime;
-      
-      // キック（ドン）
-      if (step % 2 === 0) {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.setValueAtTime(150, now);
-        osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.1);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(now + 0.1);
-      }
-      
-      // スネア（パッ）
-      if (step % 2 === 1) {
-        const noise = audioCtx.createBufferSource();
-        const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-        noise.buffer = buffer;
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-        noise.connect(gain); gain.connect(audioCtx.destination);
-        noise.start();
-      }
-
-      // メロディ（ピコピコ）
-      const melody = [261, 329, 392, 523];
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(melody[Math.floor(Math.random() * melody.length)], now);
-      gain.gain.setValueAtTime(0.03, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(); osc.stop(now + 0.1);
-
-      step++;
-    }, 300); // テンポ 
-  }
 
   async function startApp() {
     const gKey = gKeyInput.value.trim();
     const pKey = pKeyInput.value.trim();
     const topic = document.getElementById('topic').value.trim();
     const status = document.getElementById('status');
-    if (!gKey || !pKey || !topic) return alert("全部入力してね！");
+    const player = document.getElementById('player');
+
+    if (!gKey || !pKey || !topic) return alert("情報を入力してね！");
     
-    localStorage.setItem('g_key_v18', gKey);
-    localStorage.setItem('p_key_v18', pKey);
+    localStorage.setItem('g_key_v19', gKey);
+    localStorage.setItem('p_key_v19', pKey);
+
+    // 【重要】iPhone対策①：ボタンを押した瞬間にオーディオとビデオを「空回し」して準備する
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    player.src = ""; // リセット
+    player.play().catch(()=>{}); // 空の再生を試みてロック解除
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); // TTSロック解除
+
     document.getElementById('inputArea').style.display = 'none';
 
     try {
-      status.textContent = "AIモデルを探し中...";
+      status.textContent = "AIモデルを探査中...";
       const mRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${gKey}`);
       const mData = await mRes.json();
       const models = mData.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).sort((a,b)=>b.name.localeCompare(a.name));
 
-      // 【プロンプト強化】楽しそうなナレーションを依頼
-      const prompt = `あなたは超人気の動画クリエイターです。テーマ「${topic}」で、観ている人がワクワクして笑えるショート動画台本（3シーン）を作ってください。
-指示：
-1. ナレーションは「みんな見て！」「最高すぎる！」といった元気な話し言葉で、絵文字も入れてください。
-2. 構成はJSON形式 {"scenes": [{"text": "元気なナレーション", "search_keyword": "English"}]} のみ。`;
+      const prompt = `超人気クリエイターとしてテーマ「${topic}」で、SNS向け爆笑ショート動画台本（3シーン）を作ってください。
+JSON形式 {"scenes": [{"text": "元気なセリフ", "search_keyword": "English"}]} のみ。`;
 
       let timeline = null;
       let success = false;
       for (const m of models) {
-        status.textContent = `最高な台本を作成中...`;
+        status.textContent = `台本を作成中...`;
         try {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${m.name}:generateContent?key=${gKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              safetySettings: [{ category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }],
               generationConfig: { responseMimeType: "application/json" }
             })
           });
@@ -174,24 +118,22 @@
         } catch (e) { continue; }
       }
 
-      if (!success) throw new Error("AIが休憩中みたい。10分待ってね！");
+      if (!success) throw new Error("AI制限中です");
 
       playBeat(); // BGM開始
 
       const linksDiv = document.getElementById('links');
       for (let i = 0; i < timeline.length; i++) {
-        const scene = timeline[i];
-        status.textContent = `超イケてる映像を検索中 (${i+1}/3)...`;
-        const pRes = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(scene.search_keyword)}&orientation=portrait&per_page=1`, {
+        status.textContent = `映像を取得中 (${i+1}/3)...`;
+        const pRes = await fetch(`https://api.pexels.com/videos/search?query=${encodeURIComponent(timeline[i].search_keyword)}&orientation=portrait&per_page=1`, {
           headers: { Authorization: pKey }
         });
         const pData = await pRes.json();
         if (pData.videos?.length > 0) {
-          const file = pData.videos[0].video_files.find(f => f.width >= 720) || pData.videos[0].video_files[0];
-          scene.videoUrl = file.link;
+          timeline[i].videoUrl = pData.videos[0].video_files.find(f => f.width >= 720)?.link || pData.videos[0].video_files[0].link;
           const item = document.createElement('div');
           item.className = 'dl-item';
-          item.innerHTML = `<div style="font-size:11px; margin-bottom:5px;">${scene.text}</div><a class="dl-link" href="${file.link}" target="_blank">📥 保存</a>`;
+          item.innerHTML = `<div style="font-size:11px; margin-bottom:5px;">${timeline[i].text}</div><a class="dl-link" href="${timeline[i].videoUrl}" target="_blank">📥 保存</a>`;
           linksDiv.appendChild(item);
         }
       }
@@ -205,26 +147,58 @@
   async function playMovie(timeline) {
     const player = document.getElementById('player');
     const subtitle = document.getElementById('subtitle');
+    
     for (let scene of timeline) {
       player.classList.remove('active');
       player.src = scene.videoUrl;
-      player.muted = false;
-      await new Promise(r => player.oncanplay = r);
+      player.load(); // iPhone用に明示的にロード
+
+      // 動画の準備ができたら再生
+      await new Promise(r => {
+        player.oncanplaythrough = r;
+        // 万が一読み込みが遅い場合のタイムアウト
+        setTimeout(r, 3000);
+      });
+
       subtitle.textContent = scene.text;
       player.classList.add('active');
-      player.play();
       
+      // 【重要】iPhone対策②：再生直前にmutedを解除
+      player.muted = false; 
+      const playPromise = player.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.log("iPhone Autoplay block:", error);
+          // もしブロックされたら消音で再生（これなら確実に映る）
+          player.muted = true;
+          player.play();
+        });
+      }
+
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(scene.text);
-      u.lang = 'ja-JP'; 
-      u.rate = 1.2;  // 少し早口で元気よく
-      u.pitch = 1.3; // 高めの明るい声
+      u.lang = 'ja-JP'; u.rate = 1.2; u.pitch = 1.3;
       window.speechSynthesis.speak(u);
       
       await new Promise(r => setTimeout(r, 6000));
     }
     if(rhythmInterval) clearInterval(rhythmInterval);
-    document.getElementById('status').textContent = "上映終了！下から保存してSNSにアップしよう！";
+    document.getElementById('status').textContent = "DONE!";
+  }
+
+  function playBeat() {
+    let step = 0;
+    rhythmInterval = setInterval(() => {
+      const now = audioCtx.currentTime;
+      if (step % 2 === 0) { // Kick
+        const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        o.frequency.setValueAtTime(150, now); o.frequency.exponentialRampToValueAtTime(0.01, now+0.1);
+        g.gain.setValueAtTime(0.2, now); g.gain.exponentialRampToValueAtTime(0.01, now+0.1);
+        o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(now+0.1);
+      }
+      step++;
+    }, 350);
   }
 </script>
 </body>
